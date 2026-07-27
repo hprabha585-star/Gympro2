@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Gym Admin Panel - GymPro</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'DM Sans',sans-serif;background:#F0F5F5;color:#1A2E2E;padding:16px;padding-bottom:48px;-webkit-tap-highlight-color:transparent}
+    .container{max-width:700px;margin:0 auto}
+
+    /* Header */
+    .header{background:linear-gradient(135deg,#1A8C8C,#156F6F);color:#fff;padding:18px 16px;border-radius:18px;margin-bottom:14px;box-shadow:0 4px 20px rgba(26,140,140,.25)}
+    .header h1{font-size:1.2rem;font-weight:800;margin-bottom:3px}
+    .header p{font-size:.72rem;opacity:.7}
+    .header-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+    .back-link{color:rgba(255,255,255,.8);font-size:.78rem;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:4px;margin-bottom:10px}
+
+    /* Stats */
+    .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+    .stat-card{background:#fff;padding:14px;border-radius:14px;text-align:center;border:1px solid #E0ECEC;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+    .stat-num{font-size:1.7rem;font-weight:800;color:#1A8C8C;line-height:1}
+    .stat-lbl{font-size:.62rem;color:#8AABAB;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+
+    /* Section */
+    .section{background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+    .sec-head{padding:13px 16px;background:#F8FFFE;border-bottom:1.5px solid #E0ECEC;font-weight:800;font-size:.92rem;display:flex;align-items:center;gap:8px}
+
+    /* Create staff form */
+    .form-body{padding:14px 16px}
+    .field{margin-bottom:12px}
+    .field label{display:block;font-size:.68rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+    .field input{width:100%;padding:12px 14px;border:2px solid #E0ECEC;border-radius:12px;font-family:inherit;font-size:.9rem;color:#1A2E2E;background:#F8FFFE;transition:border-color .2s}
+    .field input:focus{outline:none;border-color:#1A8C8C;background:#fff;box-shadow:0 0 0 3px rgba(26,140,140,.1)}
+
+    /* Permissions grid */
+    .perm-box{background:#F8FFFE;border:1px solid #E0ECEC;border-radius:12px;padding:12px;margin-bottom:12px}
+    .perm-title{font-size:.68rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+    .perm-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .perm-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fff;border-radius:10px;border:1px solid #E0ECEC;cursor:pointer}
+    .perm-item input[type=checkbox]{width:16px;height:16px;accent-color:#1A8C8C;cursor:pointer;flex-shrink:0}
+    .perm-item span{font-size:.78rem;font-weight:600;color:#1A2E2E}
+    .perm-item .pi{font-size:.9rem}
+    .perm-item.danger{border-color:#FECDD5}
+    .perm-item.danger span{color:#E74C3C}
+
+    /* Buttons */
+    .btn{padding:9px 16px;border:none;border-radius:11px;font-family:inherit;font-weight:700;font-size:.82rem;cursor:pointer;transition:all .18s}
+    .btn:active{transform:scale(.96)}
+    .btn-primary{background:#1A8C8C;color:#fff;width:100%;padding:13px;font-size:.9rem;margin-top:4px}
+    .btn-approve{background:#27AE60;color:#fff}
+    .btn-reject{background:#E74C3C;color:#fff}
+    .btn-ghost{background:#F0F5F5;color:#4A6464;border:1px solid #E0ECEC}
+    .btn-warn{background:#FEF9E7;color:#D97706;border:1px solid #FDE68A}
+    .btn-sm{padding:6px 11px;font-size:.72rem}
+
+    /* Staff cards */
+    .staff-card{padding:14px 16px;border-bottom:1px solid #F0F5F5}
+    .staff-card:last-child{border-bottom:none}
+    .staff-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    .staff-av{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#1A8C8C,#27AE60);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:1rem;font-weight:800;flex-shrink:0}
+    .staff-info{flex:1;min-width:0}
+    .staff-info h4{font-size:.92rem;font-weight:800;color:#1A2E2E;margin-bottom:2px}
+    .staff-info .email{font-size:.72rem;color:#8AABAB;margin-bottom:4px}
+    .staff-btn-row{display:flex;gap:6px;flex-wrap:wrap}
+
+    /* Inline permission toggles on existing staff */
+    .perm-inline{background:#F8FFFE;border-radius:10px;padding:10px;border:1px solid #E0ECEC;margin-top:8px}
+    .perm-inline .pi-title{font-size:.62rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px}
+    .perm-inline .perm-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+    .perm-toggle{display:flex;align-items:center;gap:6px;font-size:.76rem;cursor:pointer;padding:5px 8px;background:#fff;border-radius:8px;border:1px solid #E0ECEC}
+    .perm-toggle input[type=checkbox]{accent-color:#1A8C8C;width:15px;height:15px;flex-shrink:0}
+
+    /* Status badge */
+    .status{display:inline-block;padding:2px 9px;border-radius:14px;font-size:.62rem;font-weight:800}
+    .s-active{background:#E8F8EF;color:#27AE60}
+    .s-inactive{background:#F3F4F6;color:#6B7280}
+
+    /* Empty */
+    .empty{text-align:center;padding:32px 20px;color:#8AABAB}
+    .empty .ei{font-size:2.2rem;margin-bottom:8px}
+
+    /* Toast */
+    .toast{position:fixed;bottom:20px;left:16px;right:16px;max-width:500px;margin:0 auto;
+      background:#1A2E2E;color:#fff;padding:13px 16px;border-radius:12px;
+      text-align:center;font-weight:700;font-size:.85rem;
+      transform:translateY(120px);transition:transform .3s cubic-bezier(.22,1,.36,1);z-index:999;box-shadow:0 4px 20px rgba(0,0,0,.2)}
+    .toast.show{transform:translateY(0)}
+    .toast.success{background:#27AE60}
+    .toast.error{background:#E74C3C}
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <a href="/" class="back-link">← Back to Dashboard</a>
+
+  <div class="header">
+    <div class="header-row">
+      <div>
+        <h1>🏋️ Gym Admin Panel</h1>
+        <p id="adminInfo">Loading…</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-num" id="statStaff">—</div>
+      <div class="stat-lbl">Staff Members</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="statActive">—</div>
+      <div class="stat-lbl">Active Staff</div>
+    </div>
+  </div>
+
+  <!-- ── CREATE STAFF ── -->
+  <div class="section">
+    <div class="sec-head">➕ Add Staff Member</div>
+    <div class="form-body">
+      <div class="field">
+        <label>Full Name</label>
+        <input type="text" id="sName" placeholder="e.g. Rahul Kumar">
+      </div>
+      <div class="field">
+        <label>Email Address</label>
+        <input type="email" id="sEmail" placeholder="staff@email.com" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Password (staff will use this to login)</label>
+        <input type="text" id="sPassword" placeholder="Min 6 characters">
+      </div>
+
+      <!-- Permissions -->
+      <div class="perm-box">
+        <div class="perm-title">🔒 What can this staff member access?</div>
+        <div class="perm-grid">
+          <label class="perm-item">
+            <input type="checkbox" id="p_members" checked>
+            <span class="pi">👥</span><span>Members</span>
+          </label>
+          <label class="perm-item">
+            <input type="checkbox" id="p_attendance" checked>
+            <span class="pi">📅</span><span>Attendance</span>
+          </label>
+          <label class="perm-item">
+            <input type="checkbox" id="p_payments" checked>
+            <span class="pi">💳</span><span>Payments</span>
+          </label>
+          <label class="perm-item">
+            <input type="checkbox" id="p_trainers" checked>
+            <span class="pi">💪</span><span>Trainers / PT</span>
+          </label>
+          <label class="perm-item">
+            <input type="checkbox" id="p_revenue">
+            <span class="pi">📈</span><span>Revenue</span>
+          </label>
+          <label class="perm-item danger">
+            <input type="checkbox" id="p_delete">
+            <span class="pi">🗑️</span><span>Delete Members</span>
+          </label>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" onclick="createStaff()">➕ Create Staff Account</button>
+    </div>
+  </div>
+
+  <!-- ── STAFF LIST ── -->
+  <div class="section">
+    <div class="sec-head">👥 My Staff Members</div>
+    <div id="staffList"><div class="empty"><div class="ei">⏳</div><p>Loading…</p></div></div>
+  </div>
+
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const BASE = 'https://lightcoral-lemur-755075.hostingersite.com/api';
+const hdrs = () => ({ 'Content-Type':'application/json', 'Authorization':`Bearer ${localStorage.getItem('token')}` });
+
+// ── Auth guard ────────────────────────────────────────────────
+(function() {
+  const u = JSON.parse(localStorage.getItem('user') || '{}');
+  if (!u || !localStorage.getItem('token')) { window.location.href = '/login.html'; return; }
+  if (u.role === 'staff')      { window.location.href = '/'; return; }
+  if (u.role === 'superadmin') { window.location.href = '/superadmin.html'; return; }
+  document.getElementById('adminInfo').textContent = `${u.name || ''} · ${u.gymName || 'Gym Admin'}`;
+})();
+
+// ── Toast ─────────────────────────────────────────────────────
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `toast show ${type}`;
+  setTimeout(() => el.className = 'toast', 3200);
+}
+
+function esc(s) {
+  return String(s||'').replace(/[&<>"']/g,
+    c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function staffInitials(name) {
+  return (name||'?').split(' ').map(x=>x[0]).join('').toUpperCase().slice(0,2);
+}
+
+// ── Load staff list ───────────────────────────────────────────
+async function loadStaff() {
+  try {
+    const res = await fetch(`${BASE}/admin/staff`, { headers: hdrs() });
+    if (res.status === 401) { window.location.href = '/login.html'; return; }
+    if (!res.ok) throw new Error();
+    const staff = await res.json();
+
+    document.getElementById('statStaff').textContent  = staff.length;
+    document.getElementById('statActive').textContent = staff.filter(s => s.isActive).length;
+
+    const el = document.getElementById('staffList');
+    if (!staff.length) {
+      el.innerHTML = '<div class="empty"><div class="ei">👥</div><p>No staff yet. Create one above.</p></div>';
+      return;
+    }
+
+    el.innerHTML = staff.map(s => {
+      const p = s.staffPermissions || {};
+      const permsMap = [
+        { key:'viewMembers',    icon:'👥', label:'Members'    },
+        { key:'viewAttendance', icon:'📅', label:'Attendance' },
+        { key:'viewPayments',   icon:'💳', label:'Payments'   },
+        { key:'viewTrainers',   icon:'💪', label:'Trainers'   },
+        { key:'viewRevenue',    icon:'📈', label:'Revenue'    },
+        { key:'deleteMembers',  icon:'🗑️', label:'Delete'     },
+      ];
+      const permToggles = permsMap.map(pm => `
+        <label class="perm-toggle">
+          <input type="checkbox" ${p[pm.key]?'checked':''}
+            onchange="updatePerm('${esc(s._id)}','${pm.key}',this.checked)">
+          ${pm.icon} ${pm.label}
+        </label>`).join('');
+
+      return `
+        <div class="staff-card">
+          <div class="staff-top">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="staff-av">${esc(staffInitials(s.name))}</div>
+              <div class="staff-info">
+                <h4>${esc(s.name)}</h4>
+                <div class="email">✉️ ${esc(s.email)}</div>
+                <span class="status ${s.isActive?'s-active':'s-inactive'}">${s.isActive?'Active':'Inactive'}</span>
+              </div>
+            </div>
+            <div class="staff-btn-row">
+              <button class="btn btn-sm ${s.isActive?'btn-warn':'btn-approve'}"
+                onclick="toggleStaff('${esc(s._id)}','${esc(s.name)}')">
+                ${s.isActive?'🔴 Deactivate':'🟢 Activate'}
+              </button>
+              <button class="btn btn-reject btn-sm"
+                onclick="deleteStaff('${esc(s._id)}','${esc(s.name)}')">🗑️</button>
+            </div>
+          </div>
+          <div class="perm-inline">
+            <div class="pi-title">🔒 Access Control — toggle to update instantly</div>
+            <div class="perm-grid">${permToggles}</div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('staffList').innerHTML =
+      '<div class="empty"><p style="color:#E74C3C">Error loading staff</p></div>';
+  }
+}
+
+// ── Create staff ──────────────────────────────────────────────
+async function createStaff() {
+  const name     = document.getElementById('sName').value.trim();
+  const email    = document.getElementById('sEmail').value.trim();
+  const password = document.getElementById('sPassword').value.trim();
+
+  if (!name || !email || !password) { toast('Fill all fields', 'error'); return; }
+  if (password.length < 6)          { toast('Password min 6 characters', 'error'); return; }
+
+  const permissions = {
+    viewMembers:    document.getElementById('p_members').checked,
+    addMembers:     document.getElementById('p_members').checked,
+    editMembers:    document.getElementById('p_members').checked,
+    deleteMembers:  document.getElementById('p_delete').checked,
+    viewAttendance: document.getElementById('p_attendance').checked,
+    markAttendance: document.getElementById('p_attendance').checked,
+    viewTrainers:   document.getElementById('p_trainers').checked,
+    viewPayments:   document.getElementById('p_payments').checked,
+    viewRevenue:    document.getElementById('p_revenue').checked,
+    viewSettings:   false
+  };
+
+  try {
+    const res = await fetch(`${BASE}/admin/create-staff`, {
+      method:'POST', headers: hdrs(),
+      body: JSON.stringify({ name, email, password, permissions })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`✅ Staff account created for ${name}`, 'success');
+      // Clear form
+      ['sName','sEmail','sPassword'].forEach(id => document.getElementById(id).value = '');
+      ['p_members','p_attendance','p_payments','p_trainers'].forEach(id =>
+        document.getElementById(id).checked = true);
+      ['p_revenue','p_delete'].forEach(id =>
+        document.getElementById(id).checked = false);
+      loadStaff();
+    } else {
+      toast(data.error || 'Failed to create staff', 'error');
+    }
+  } catch(e) { toast('Network error', 'error'); }
+}
+
+// ── Update permission ─────────────────────────────────────────
+async function updatePerm(staffId, perm, value) {
+  try {
+    const res = await fetch(`${BASE}/admin/staff/${staffId}/permissions`, {
+      method:'PATCH', headers: hdrs(),
+      body: JSON.stringify({ [perm]: value })
+    });
+    if (res.ok) toast(`Permission updated`, 'success');
+    else        toast('Failed to update', 'error');
+  } catch(e) { toast('Network error', 'error'); }
+}
+
+// ── Toggle staff active ───────────────────────────────────────
+async function toggleStaff(staffId, name) {
+  try {
+    const res = await fetch(`${BASE}/admin/user/${staffId}/toggle`, { method:'PATCH', headers: hdrs() });
+    const data = await res.json();
+    if (res.ok) { toast(data.message, 'success'); loadStaff(); }
+    else        toast('Failed', 'error');
+  } catch(e) { toast('Network error', 'error'); }
+}
+
+// ── Delete staff ──────────────────────────────────────────────
+async function deleteStaff(staffId, name) {
+  if (!confirm(`Remove staff account "${name}"? They will lose access immediately.`)) return;
+  try {
+    const res = await fetch(`${BASE}/admin/user/${staffId}`, { method:'DELETE', headers: hdrs() });
+    const data = await res.json();
+    if (res.ok) { toast(`${name} removed`, 'success'); loadStaff(); }
+    else        toast(data.error || 'Failed', 'error');
+  } catch(e) { toast('Network error', 'error'); }
+}
+
+// ── Init ──────────────────────────────────────────────────────
+loadStaff();
+</script>
+</body>
+</html>
