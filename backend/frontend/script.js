@@ -533,6 +533,7 @@ function calculateRevenue(members) {
       
       if (monthKeys.includes(key)) {
         revenue.months[key].total += amt;
+        revenue.grandTotal += amt; // always counted toward total, even while still pending/uncleared
         if (method === 'cash') {
           revenue.months[key].cash += amt;
           revenue.cashTotal += amt;
@@ -540,13 +541,18 @@ function calculateRevenue(members) {
           revenue.months[key].online += amt;
           revenue.onlineTotal += amt;
         }
+        // 'partial' = a partial payment on a balance that isn't fully
+        // cleared yet — counts toward the total above, but NOT toward any
+        // specific fee category until the balance is fully paid off (see
+        // the due-collection logic, which replaces these with real
+        // itemized entries once cleared).
         if (p.type === 'admission') {
           revenue.months[key].admission += amt;
           revenue.admissionTotal += amt;
         } else if (p.type === 'pt') {
           revenue.months[key].pt += amt;
           revenue.ptTotal += amt;
-        } else {
+        } else if (p.type !== 'partial') {
           revenue.months[key].plan += amt;
           revenue.planTotal += amt;
         }
@@ -554,7 +560,6 @@ function calculateRevenue(members) {
     });
   });
 
-  revenue.grandTotal = revenue.planTotal + revenue.admissionTotal + revenue.ptTotal;
   return revenue;
 }
 
@@ -591,7 +596,7 @@ function getRevenueInRange(members, fromStr, toStr) {
       if ((p.method || 'cash') === 'cash') out.cash += amt; else out.online += amt;
       if (p.type === 'admission') out.admission += amt;
       else if (p.type === 'pt') out.pt += amt;
-      else out.plan += amt;
+      else if (p.type !== 'partial') out.plan += amt;
       out.entries.push({ member: m, payment: p });
     });
   });
@@ -2265,27 +2270,36 @@ async function loadRevenuePage() {
         ${members.filter(m => (m.paymentHistory || []).length || Number(m.pendingAmount) > 0).map(m => {
           const history = m.paymentHistory || [];
           const pendingBreakdown = getPendingBreakdown(m);
+          const hasPending = Number(m.pendingAmount) > 0;
           return `
             <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #F0F5F5">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
                 <span style="font-weight:700;font-size:.82rem;color:#1A2E2E">${esc(m.name)}</span>
                 <span style="font-size:.65rem;font-weight:800;background:#1A8C8C;color:#fff;padding:1px 7px;border-radius:8px">ID #${m.memberNo||'-'}</span>
               </div>
-              ${groupPaymentEntries(history).map(row => `
-                <div style="display:flex;justify-content:space-between;font-size:.7rem;color:#4A6464;padding:2px 0;padding-left:12px">
-                  <span>₹${row.amount.toLocaleString('en-IN')}</span>
-                  <span>${row.date ? new Date(row.date).toLocaleDateString('en-IN') : '—'}</span>
-                  <span style="color:#8AABAB;font-weight:600">${row.methodDisplay}</span>
-                  ${row.type ? `<span style="font-size:.6rem;color:#8AABAB">${row.type}</span>` : ''}
+              ${!hasPending ? groupPaymentEntries(history).map(tx => `
+                <div style="padding:4px 0;padding-left:12px;border-bottom:1px dashed #F0F5F5">
+                  ${tx.categories.map(c => `
+                    <div style="display:flex;justify-content:space-between;font-size:.7rem;color:#4A6464;padding:1px 0">
+                      <span>₹${c.amount.toLocaleString('en-IN')}</span>
+                      <span style="font-size:.6rem;color:#8AABAB;text-transform:capitalize">${c.type}</span>
+                      <span style="color:#27AE60;font-weight:600">Paid</span>
+                    </div>
+                  `).join('')}
+                  <div style="display:flex;justify-content:space-between;font-size:.65rem;color:#8AABAB;padding-top:2px">
+                    <span>${tx.date ? new Date(tx.date).toLocaleDateString('en-IN') : '—'}</span>
+                    <span style="font-weight:700;color:#1A8C8C">${tx.methodSummary}</span>
+                  </div>
                 </div>
-              `).join('')}
+              `).join('') : ''}
               ${pendingBreakdown ? `
                 <div style="background:#FEECEB;border-radius:8px;padding:6px 10px;margin:6px 0 2px 12px">
-                  <div style="font-size:.65rem;font-weight:800;color:#E74C3C;margin-bottom:2px">⚠️ Pending — ₹${Number(m.pendingAmount).toLocaleString('en-IN')} due</div>
-                  <div style="font-size:.65rem;color:#B94A42;display:flex;gap:10px;flex-wrap:wrap">
-                    ${pendingBreakdown.plan > 0 ? `<span>Plan: ₹${pendingBreakdown.plan.toLocaleString('en-IN')} pending</span>` : ''}
-                    ${pendingBreakdown.admission > 0 ? `<span>Admission: ₹${pendingBreakdown.admission.toLocaleString('en-IN')} pending</span>` : ''}
-                    ${pendingBreakdown.pt > 0 ? `<span>PT: ₹${pendingBreakdown.pt.toLocaleString('en-IN')} pending</span>` : ''}
+                  ${history.length ? `<div style="font-size:.65rem;font-weight:700;color:#27AE60;margin-bottom:3px">✅ ₹${history.reduce((s,p)=>s+(p.amount||0),0).toLocaleString('en-IN')} paid so far</div>` : ''}
+                  <div style="font-size:.65rem;font-weight:800;color:#E74C3C">
+                    ⚠️ ₹${Number(m.pendingAmount).toLocaleString('en-IN')} pending
+                    ${[pendingBreakdown.plan > 0 ? 'Plan' : '', pendingBreakdown.admission > 0 ? 'Admission' : '', pendingBreakdown.pt > 0 ? 'PT' : ''].filter(Boolean).length
+                      ? ` (${[pendingBreakdown.plan > 0 ? 'Plan' : '', pendingBreakdown.admission > 0 ? 'Admission' : '', pendingBreakdown.pt > 0 ? 'PT' : ''].filter(Boolean).join(', ')})`
+                      : ''}
                   </div>
                 </div>
               ` : ''}
@@ -2329,30 +2343,37 @@ function getPendingBreakdown(m) {
   return { plan, admission, pt };
 }
 
+/* Groups payment-history entries by whole transaction (groupId), not by
+   fee category. Returns one row per transaction with:
+   - categories: [{type, amount}] — e.g. Plan ₹1667, Admission ₹500 — each
+     always just "paid", no method shown per line
+   - methodSummary: the payment method for the WHOLE transaction — 'UPI',
+     'Cash', or 'UPI ₹X + Cash ₹Y' if it was split — shown once, separately */
 function groupPaymentEntries(history) {
-  const groups = {};
+  const tx = {};
   const order = [];
   history.forEach((p, i) => {
-    const key = p.groupId ? `${p.groupId}|${p.type || 'plan'}` : `single-${i}`;
-    if (!groups[key]) { groups[key] = []; order.push(key); }
-    groups[key].push(p);
+    const key = p.groupId || `single-${i}`;
+    if (!tx[key]) { tx[key] = { date: p.date, categories: {}, upiTotal: 0, cashTotal: 0, otherTotal: 0 }; order.push(key); }
+    const g = tx[key];
+    const type = p.type || 'plan';
+    g.categories[type] = (g.categories[type] || 0) + (p.amount || 0);
+    if (p.method === 'upi') g.upiTotal += p.amount || 0;
+    else if (p.method === 'cash') g.cashTotal += p.amount || 0;
+    else g.otherTotal += p.amount || 0; // card, etc.
   });
 
   return order.map(key => {
-    const items = groups[key];
-    const amount = items.reduce((sum, p) => sum + (p.amount || 0), 0);
-    let methodDisplay;
-    if (items.length > 1) {
-      const upi = items.find(p => p.method === 'upi');
-      const cash = items.find(p => p.method === 'cash');
-      const parts = [];
-      if (upi) parts.push(`UPI ₹${upi.amount.toLocaleString('en-IN')}`);
-      if (cash) parts.push(`Cash ₹${cash.amount.toLocaleString('en-IN')}`);
-      methodDisplay = parts.join(' + ') || 'Paid';
-    } else {
-      methodDisplay = 'Paid';
-    }
-    return { amount, date: items[0].date, type: items[0].type, methodDisplay };
+    const g = tx[key];
+    const parts = [];
+    if (g.upiTotal > 0) parts.push(`UPI ₹${g.upiTotal.toLocaleString('en-IN')}`);
+    if (g.cashTotal > 0) parts.push(`Cash ₹${g.cashTotal.toLocaleString('en-IN')}`);
+    if (g.otherTotal > 0) parts.push(`Card ₹${g.otherTotal.toLocaleString('en-IN')}`);
+    return {
+      date: g.date,
+      categories: Object.entries(g.categories).map(([type, amount]) => ({ type, amount })),
+      methodSummary: parts.join(' + ') || 'Paid'
+    };
   });
 }
 
@@ -2566,7 +2587,7 @@ function selectPayMethod(method) {
   const cashPanel = document.getElementById('payCashPanel');
   const cardPanel = document.getElementById('payCardPanel');
   const splitPanel = document.getElementById('paySplitPanel');
-  if (upiPanel) upiPanel.style.display = method === 'upi' ? 'block' : 'none';
+  if (upiPanel) upiPanel.style.display = (method === 'upi' || method === 'split') ? 'block' : 'none';
   if (cashPanel) cashPanel.style.display = method === 'cash' ? 'block' : 'none';
   if (cardPanel) cardPanel.style.display = method === 'card' ? 'block' : 'none';
   if (splitPanel) splitPanel.style.display = method === 'split' ? 'block' : 'none';
@@ -2590,55 +2611,60 @@ function updateSplitDisplay() {
   const upiAmt = Math.max(0, Math.min(total, parseFloat(document.getElementById('splitUpiAmt')?.value) || 0));
   const cashAmt = Math.max(0, total - upiAmt);
   row.innerHTML = `📱 ₹${upiAmt.toLocaleString('en-IN')} via UPI &nbsp;+&nbsp; 💵 ₹${cashAmt.toLocaleString('en-IN')} via Cash`;
+  updatePaymentQR(upiAmt); // QR should only ever reflect the UPI portion, not the full/split total
 }
 
-/* Builds payment-history entries for ANY amount being logged now — full
-   payment, a partial payment, or a later "Receive" collection of a pending
-   balance. `breakdown` = {plan, admission, pt} — the member's FULL charge
-   for each category, used only to compute the proportion each category
-   should get of `amountToLog`. This guarantees admission/PT amounts are
-   never silently dropped from revenue totals just because the payment was
-   partial or split (that was the bug — everything used to get logged as
-   one plain "plan" entry when < full amount was received).
-   For 'split' method, each category is further divided into UPI/Cash
-   proportionally to the overall UPI amount entered. */
-function buildAttributedEntries(amountToLog, method, dateVal, breakdown, receiptPrefix) {
-  amountToLog = Math.max(0, Math.round(amountToLog));
+/* For a payment that does NOT fully clear the charge (something stays
+   pending) — logs the amount as an undifferentiated 'partial' entry, not
+   split across plan/admission/pt. It still counts toward total/online/cash
+   revenue immediately, but the fee-category attribution is deliberately
+   deferred until the balance is fully paid off (see
+   finalizeFullBreakdownEntries below) — splitting a partial amount into
+   guessed category portions, and then splitting AGAIN when the rest is
+   collected later, produced confusing double-divided numbers. */
+function buildPartialEntries(amount, method, dateVal, receiptPrefix) {
+  amount = Math.max(0, Math.round(amount));
   const groupId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const totalBreakdown = (breakdown.plan || 0) + (breakdown.admission || 0) + (breakdown.pt || 0);
-  const ratio = totalBreakdown > 0 ? Math.min(1, amountToLog / totalBreakdown) : 1;
+  if (method === 'split') {
+    const upiAmt = Math.max(0, Math.min(amount, parseFloat(document.getElementById('splitUpiAmt')?.value) || 0));
+    const cashAmt = Math.max(0, amount - upiAmt);
+    const entries = [];
+    if (upiAmt > 0) entries.push({ amount: upiAmt, date: dateVal, method: 'upi', receiptNo: `${receiptPrefix}-UPI-${Date.now()}`, type: 'partial', groupId });
+    if (cashAmt > 0) entries.push({ amount: cashAmt, date: dateVal, method: 'cash', receiptNo: `${receiptPrefix}-CASH-${Date.now()}`, type: 'partial', groupId });
+    if (entries.length) return entries;
+  }
+  return [{ amount, date: dateVal, method: method === 'split' ? 'cash' : method, receiptNo: `${receiptPrefix}-${Date.now()}`, type: 'partial', groupId }];
+}
 
-  let planPortion = totalBreakdown > 0 ? Math.round((breakdown.plan || 0) * ratio) : amountToLog;
-  let admPortion  = totalBreakdown > 0 ? Math.round((breakdown.admission || 0) * ratio) : 0;
-  let ptPortion   = totalBreakdown > 0 ? Math.round((breakdown.pt || 0) * ratio) : 0;
-  // fix rounding drift so the parts always sum exactly to amountToLog
-  planPortion += amountToLog - (planPortion + admPortion + ptPortion);
-
-  const upiTotal = method === 'split'
-    ? Math.max(0, Math.min(amountToLog, parseFloat(document.getElementById('splitUpiAmt')?.value) || 0))
-    : 0;
-  const upiRatio = (method === 'split' && amountToLog > 0) ? (upiTotal / amountToLog) : 0;
+/* Called once a charge is FULLY paid — either immediately (a normal full
+   payment) or the moment a "Receive" collection finally clears a pending
+   balance. Produces clean, one-time itemized entries using the member's
+   REAL fee amounts (`breakdown` = {plan, admission, pt}), split across
+   UPI/Cash proportionally to `methodTotals` = {upi, cash} — the combined
+   totals across every payment that went toward this charge (both the
+   original partial payment(s) and this final collection), so the split
+   reflects how the money actually came in overall, not just this last step. */
+function finalizeFullBreakdownEntries(breakdown, methodTotals, dateVal, receiptPrefix) {
+  const groupId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-final`;
+  const combinedTotal = (methodTotals.upi || 0) + (methodTotals.cash || 0);
+  const upiRatio = combinedTotal > 0 ? (methodTotals.upi || 0) / combinedTotal : 0;
 
   const categories = [
-    { amt: planPortion, type: 'plan' },
-    { amt: admPortion, type: 'admission' },
-    { amt: ptPortion, type: 'pt' }
+    { amt: Math.round(breakdown.plan || 0), type: 'plan' },
+    { amt: Math.round(breakdown.admission || 0), type: 'admission' },
+    { amt: Math.round(breakdown.pt || 0), type: 'pt' }
   ].filter(c => c.amt > 0);
 
   let entries = [];
   categories.forEach(cat => {
-    if (method === 'split') {
-      const catUpi = Math.round(cat.amt * upiRatio);
-      const catCash = cat.amt - catUpi;
-      if (catUpi > 0) entries.push({ amount: catUpi, date: dateVal, method: 'upi', receiptNo: `${receiptPrefix}-${cat.type.toUpperCase()}-UPI-${Date.now()}`, type: cat.type, groupId });
-      if (catCash > 0) entries.push({ amount: catCash, date: dateVal, method: 'cash', receiptNo: `${receiptPrefix}-${cat.type.toUpperCase()}-CASH-${Date.now()}`, type: cat.type, groupId });
-    } else {
-      entries.push({ amount: cat.amt, date: dateVal, method: method, receiptNo: `${receiptPrefix}-${cat.type.toUpperCase()}-${Date.now()}`, type: cat.type, groupId });
-    }
+    const catUpi = Math.round(cat.amt * upiRatio);
+    const catCash = cat.amt - catUpi;
+    if (catUpi > 0) entries.push({ amount: catUpi, date: dateVal, method: 'upi', receiptNo: `${receiptPrefix}-${cat.type.toUpperCase()}-UPI-${Date.now()}`, type: cat.type, groupId });
+    if (catCash > 0) entries.push({ amount: catCash, date: dateVal, method: 'cash', receiptNo: `${receiptPrefix}-${cat.type.toUpperCase()}-CASH-${Date.now()}`, type: cat.type, groupId });
   });
 
-  if (!entries.length) {
-    entries.push({ amount: amountToLog, date: dateVal, method: method === 'split' ? 'cash' : method, receiptNo: `${receiptPrefix}-${Date.now()}`, type: 'plan', groupId });
+  if (!entries.length && combinedTotal > 0) {
+    entries.push({ amount: combinedTotal, date: dateVal, method: methodTotals.cash >= methodTotals.upi ? 'cash' : 'upi', receiptNo: `${receiptPrefix}-${Date.now()}`, type: 'plan', groupId });
   }
   return entries;
 }
@@ -2794,29 +2820,62 @@ async function confirmPayment() {
   // ── Collecting a pending/due balance (not a new payment or renewal) ──
   if (curPayMember.mode === 'due') {
     const received = Math.max(0, Math.min(total, parseFloat(document.getElementById('payAmountReceived')?.value) || total));
-    const remainingDue = Math.max(0, total - received);
+    const dateVal = new Date(paymentDate);
 
     const btn = document.getElementById('confirmPayBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
     try {
       const cached = allMembersCache.find(x => (x._id||x.id) === curPayMember.id) || {};
-      // Use the member's stored fee breakdown to attribute this collection
-      // proportionally across plan/admission/pt — same fix as the other
-      // two payment flows, so a due-collection doesn't dump everything
-      // into "plan" and lose the admission/PT portion from revenue totals.
-      const breakdown = {
-        plan: Number(cached.planPrice) || 0,
-        admission: (cached.admissionWaived ? 0 : (Number(cached.admissionFee) || 0)),
-        pt: (cached.ptEnabled ? (Number(cached.ptFee) || 0) : 0)
-      };
-      const dueEntries = buildAttributedEntries(received, method, new Date(paymentDate), breakdown, 'REC-DUE');
-      const updatedHistory = [...(cached.paymentHistory || []), ...dueEntries];
+      const remainingBefore = Number(cached.pendingAmount) || total;
+      const remainingDue = Math.max(0, remainingBefore - received);
+      const history = cached.paymentHistory || [];
+
+      let updatedHistory, receiptForShare;
+
+      if (remainingDue === 0) {
+        // Fully cleared now — collapse every prior undifferentiated
+        // 'partial' entry PLUS this final collection into one clean,
+        // one-time itemized breakdown using the member's real fee
+        // amounts. This is what stops the "divided twice" confusion:
+        // nothing gets attributed to Plan/Admission/PT until this exact
+        // moment, and it only happens once.
+        const partialEntries = history.filter(p => p.type === 'partial');
+        const keptEntries = history.filter(p => p.type !== 'partial');
+
+        let combinedUpi = 0, combinedCash = 0;
+        partialEntries.forEach(p => {
+          if (p.method === 'upi') combinedUpi += p.amount || 0; else combinedCash += p.amount || 0;
+        });
+        if (method === 'split') {
+          const upiNow = Math.max(0, Math.min(received, parseFloat(document.getElementById('splitUpiAmt')?.value) || 0));
+          combinedUpi += upiNow; combinedCash += (received - upiNow);
+        } else if (method === 'upi') {
+          combinedUpi += received;
+        } else {
+          combinedCash += received;
+        }
+
+        const breakdown = {
+          plan: Number(cached.planPrice) || 0,
+          admission: (cached.admissionWaived ? 0 : (Number(cached.admissionFee) || 0)),
+          pt: (cached.ptEnabled ? (Number(cached.ptFee) || 0) : 0)
+        };
+        const finalEntries = finalizeFullBreakdownEntries(breakdown, { upi: combinedUpi, cash: combinedCash }, dateVal, 'REC-DUE');
+        updatedHistory = [...keptEntries, ...finalEntries];
+        receiptForShare = finalEntries[0]?.receiptNo;
+      } else {
+        // Still not fully paid — just log this collection as another
+        // undifferentiated partial entry, same as the original payment.
+        const partialNew = buildPartialEntries(received, method, dateVal, 'REC-DUE');
+        updatedHistory = [...history, ...partialNew];
+        receiptForShare = partialNew[0]?.receiptNo;
+      }
 
       const res = await fetch(`${API}/${curPayMember.id}`, {
         method: 'PUT', headers: hdrs(),
         body: JSON.stringify({
           pendingAmount: remainingDue,
-          lastPaymentDate: new Date(paymentDate),
+          lastPaymentDate: dateVal,
           lastPaymentMethod: method,
           lastPaymentAmount: received,
           paymentHistory: updatedHistory
@@ -2836,7 +2895,7 @@ async function confirmPayment() {
       const dueName = curPayMember.name, dueId = curPayMember.id;
       curPayMember = null; curPayMethod = null;
       loadDashboard(); loadAllMembers(); loadPayments();
-      shareReceiptFor(dueId, dueName, received, remainingDue, method, dueEntries[0]?.receiptNo);
+      shareReceiptFor(dueId, dueName, received, remainingDue, method, receiptForShare);
     } catch (e) {
       toast(`❌ ${e.message || 'Network error — check connection'}`, 'error');
     }
@@ -2855,21 +2914,27 @@ async function confirmPayment() {
     const receivedNew = Math.max(0, Math.min(total, parseFloat(document.getElementById('payAmountReceived')?.value) || total));
     const pendingNew = Math.max(0, total - receivedNew);
 
-    // IMPORTANT: only log what was actually collected. Logging the full
-    // plan/admission/pt breakdown here AND the pending balance when it's
-    // collected later double-counts revenue (charged amount + later
-    // collection both getting summed as "received"). Full payment keeps
-    // the itemised breakdown; a partial payment logs one entry for the
-    // real amount received, and pendingAmount tracks the rest.
-    // Handles full payment, partial payment, and split (UPI+Cash) all in
-    // one call — always proportionally attributes to plan/admission/pt,
-    // so those revenue totals never silently lose money to a generic
-    // "plan" bucket the way they used to.
-    const entries = buildAttributedEntries(
-      receivedNew, method, new Date(paymentDate),
-      { plan: planAmt, admission: admAmt, pt: ptAmt },
-      'REC'
-    );
+    // IMPORTANT: a partial payment is logged as one undifferentiated entry
+    // (counts toward revenue immediately, but not attributed to any fee
+    // category yet) — only once the FULL amount is in do we itemize into
+    // real Plan/Admission/PT amounts. Splitting a partial amount into
+    // guessed proportions, then splitting AGAIN when the rest is collected
+    // later, produced confusing double-divided numbers in the history.
+    let entries;
+    if (pendingNew > 0) {
+      entries = buildPartialEntries(receivedNew, method, new Date(paymentDate), 'REC');
+    } else {
+      const methodTotals = method === 'split'
+        ? (() => {
+            const upiAmt = Math.max(0, Math.min(receivedNew, parseFloat(document.getElementById('splitUpiAmt')?.value) || 0));
+            return { upi: upiAmt, cash: receivedNew - upiAmt };
+          })()
+        : (method === 'upi' ? { upi: receivedNew, cash: 0 } : { upi: 0, cash: receivedNew });
+      entries = finalizeFullBreakdownEntries(
+        { plan: planAmt, admission: admAmt, pt: ptAmt },
+        methodTotals, new Date(paymentDate), 'REC'
+      );
+    }
 
     const btn = document.getElementById('confirmPayBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
@@ -2936,14 +3001,24 @@ async function confirmPayment() {
   const receivedRenew = Math.max(0, Math.min(total, parseFloat(document.getElementById('payAmountReceived')?.value) || total));
   const pendingRenew = Math.max(0, total - receivedRenew);
 
-  // Handles full, partial, and split payments in one call — same fix as
-  // the new-member flow. Renewals never charge admission, so that share
-  // is always 0.
-  const renewEntries = buildAttributedEntries(
-    receivedRenew, method, chosenPayDate,
-    { plan: planAmt, admission: 0, pt: (isPt ? ptAmt : 0) },
-    'REC'
-  );
+  // Same fix as the new-member flow: partial payments stay
+  // undifferentiated until fully cleared; renewals never charge
+  // admission, so that share is always 0.
+  let renewEntries;
+  if (pendingRenew > 0) {
+    renewEntries = buildPartialEntries(receivedRenew, method, chosenPayDate, 'REC');
+  } else {
+    const methodTotals = method === 'split'
+      ? (() => {
+          const upiAmt = Math.max(0, Math.min(receivedRenew, parseFloat(document.getElementById('splitUpiAmt')?.value) || 0));
+          return { upi: upiAmt, cash: receivedRenew - upiAmt };
+        })()
+      : (method === 'upi' ? { upi: receivedRenew, cash: 0 } : { upi: 0, cash: receivedRenew });
+    renewEntries = finalizeFullBreakdownEntries(
+      { plan: planAmt, admission: 0, pt: (isPt ? ptAmt : 0) },
+      methodTotals, chosenPayDate, 'REC'
+    );
+  }
 
   try {
     // Use cache for existing history - avoids extra network round-trip and the
