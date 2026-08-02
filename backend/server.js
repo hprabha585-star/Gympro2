@@ -30,7 +30,7 @@ app.get('/api/health', (req, res) => {
 // Serve frontend — bundled INSIDE the backend/ folder so it deploys
 // together with the code on every GitHub push (no manual file uploads
 // to a separate filesystem needed).
-const frontendPath = path.join(__dirname, '..', 'frontend');
+const frontendPath = path.join(__dirname, 'frontend');
 app.use(express.static(frontendPath));
 app.get('/', (req, res) => res.sendFile(path.join(frontendPath, 'index.html')));
 app.get('*', (req, res) => res.sendFile(path.join(frontendPath, 'index.html')));
