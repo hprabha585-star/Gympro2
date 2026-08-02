@@ -3069,26 +3069,6 @@ async function confirmPayment() {
   }
 }
 
-/* ── SELF-SERVICE PASSWORD RESET (from inside the app, Settings page) ── */
-async function requestMyPasswordReset() {
-  const u = JSON.parse(localStorage.getItem('user') || '{}');
-  if (!u.email) { toast('Could not find your account email', 'error'); return; }
-  const newPassword = prompt(`Enter a new password for ${u.email} (min 6 characters):`);
-  if (!newPassword) return;
-  if (newPassword.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
-  const confirmPassword = prompt('Re-enter the new password to confirm:');
-  if (newPassword !== confirmPassword) { toast('Passwords did not match', 'error'); return; }
-
-  try {
-    const res = await fetch(`${BASE}/auth/request-password-reset`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: u.email, newPassword })
-    });
-    const data = await res.json();
-    toast(data.message || data.error || 'Request submitted', res.ok ? 'success' : 'error');
-  } catch (e) { toast('Network error', 'error'); }
-}
-
 /* ── SETTINGS ── */
 function loadSettings() {
   const upiIdEl = document.getElementById('sUpiId');
@@ -3400,57 +3380,10 @@ async function sendReminderFromCard(memberId) {
    SUPERADMIN FUNCTIONS
 ================================================================ */
 let _saRejectId = null;
+let _saRejectKind = 'admin';
 
 async function loadSuperAdminData() {
-  await Promise.all([loadSaPending(), loadSaGyms(), loadSaPasswordResets()]);
-}
-
-async function loadSaPasswordResets() {
-  const el = document.getElementById('saPwList');
-  if (!el) return;
-  try {
-    const res = await fetch(`${BASE}/auth/pending-password-resets`, { headers: hdrs() });
-    if (res.status === 401) { logout(); return; }
-    const list = await res.json();
-    const badge = document.getElementById('saPwBadge');
-    if (badge) badge.textContent = list.length;
-    if (!list.length) {
-      el.innerHTML = '<div class="empty"><div class="ei">&#x2705;</div><p>No pending password resets</p></div>';
-      return;
-    }
-    el.innerHTML = list.map(u => `
-      <div style="padding:12px 16px;border-bottom:1px solid #F0F5F5;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div>
-          <div style="font-weight:800;font-size:.88rem;color:#1A2E2E">${esc(u.gymName || u.name)}</div>
-          <div style="font-size:.72rem;color:#8AABAB">${esc(u.email)}</div>
-        </div>
-        <div style="display:flex;gap:6px">
-          <button onclick="saApprovePwReset('${esc(u._id)}')" style="padding:7px 12px;background:#27AE60;color:#fff;border:none;border-radius:9px;font-family:inherit;font-weight:700;font-size:.76rem;cursor:pointer">&#x2705; Approve</button>
-          <button onclick="saRejectPwReset('${esc(u._id)}')" style="padding:7px 12px;background:#E74C3C;color:#fff;border:none;border-radius:9px;font-family:inherit;font-weight:700;font-size:.76rem;cursor:pointer">&#x274C; Reject</button>
-        </div>
-      </div>`).join('');
-  } catch (e) {
-    el.innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading</p></div>';
-  }
-}
-
-async function saApprovePwReset(userId) {
-  try {
-    const res = await fetch(`${BASE}/auth/approve-password-reset/${userId}`, { method: 'POST', headers: hdrs() });
-    const data = await res.json();
-    toast(data.message || (res.ok ? 'Approved' : 'Failed'), res.ok ? 'success' : 'error');
-    loadSaPasswordResets();
-  } catch (e) { toast('Network error', 'error'); }
-}
-
-async function saRejectPwReset(userId) {
-  if (!confirm('Reject this password reset request?')) return;
-  try {
-    const res = await fetch(`${BASE}/auth/reject-password-reset/${userId}`, { method: 'POST', headers: hdrs() });
-    const data = await res.json();
-    toast(data.message || (res.ok ? 'Rejected' : 'Failed'), res.ok ? 'success' : 'error');
-    loadSaPasswordResets();
-  } catch (e) { toast('Network error', 'error'); }
+  await Promise.all([loadSaPending(), loadSaPendingGyms(), loadSaGyms()]);
 }
 
 async function loadSaPending() {
@@ -3478,12 +3411,65 @@ async function loadSaPending() {
             <div style="font-size:.68rem;color:#8AABAB;margin-top:2px">&#x1F4C5; ${new Date(u.createdAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
           </div>
         </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#F0F5F5;border-radius:10px;padding:6px 10px;margin-bottom:8px">
+          <label style="font-size:.68rem;font-weight:700;color:#4A6464;white-space:nowrap">&#x1F465; Member Limit</label>
+          <input type="number" id="sa-limit-${esc(u._id)}" placeholder="&#x221E; (unlimited)" min="0" style="flex:1;padding:6px 8px;border:1.5px solid #E0ECEC;border-radius:7px;font-family:inherit;font-size:.78rem">
+        </div>
         <div style="display:flex;gap:8px">
           <button onclick="saApprove('${esc(u._id)}','${esc(u.gymName||u.name)}')"
             style="flex:1;padding:9px;background:#27AE60;color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:700;font-size:.82rem;cursor:pointer">
             &#x2705; Approve Gym
           </button>
-          <button onclick="saOpenReject('${esc(u._id)}')"
+          <button onclick="saOpenReject('admin','${esc(u._id)}')"
+            style="flex:1;padding:9px;background:#E74C3C;color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:700;font-size:.82rem;cursor:pointer">
+            &#x274C; Reject
+          </button>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading</p></div>';
+  }
+}
+
+/* Manage Gym — additional gyms an EXISTING admin added (via + Add Gym in
+   their own Manage Gym modal), sitting in the Gym table awaiting this
+   superadmin's approval before the owner can switch to them. */
+async function loadSaPendingGyms() {
+  const el = document.getElementById('saPendingGymsList');
+  try {
+    const res = await fetch(`${BASE}/admin/pending-gyms`, { headers: hdrs() });
+    if (res.status === 401) { logout(); return; }
+    const list = await res.json();
+    document.getElementById('saPendingGymsCount').textContent = list.length;
+    document.getElementById('saPendingGymsBadge').textContent = list.length;
+    if (!list.length) {
+      el.innerHTML = '<div class="empty"><div class="ei">&#x2705;</div><p>No pending gym requests</p></div>';
+      return;
+    }
+    el.innerHTML = list.map(g => `
+      <div style="padding:14px 16px;border-bottom:1px solid #F0F5F5">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#D97706,#F39C12);
+            display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.1rem;font-weight:800;flex-shrink:0">
+            ${esc((g.name||'G')[0].toUpperCase())}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:800;font-size:.95rem;color:#1A2E2E">${esc(g.name)}</div>
+            <div style="font-size:.75rem;color:#4A6464;margin-top:1px">&#x1F464; ${esc(g.User?.name||'')} &nbsp;|&nbsp; &#x2709;&#xFE0F; ${esc(g.User?.email||'')}</div>
+            <div style="font-size:.7rem;color:#8AABAB;margin-top:2px">Already owns: ${esc(g.User?.gymName||'')}</div>
+            <div style="font-size:.68rem;color:#8AABAB;margin-top:2px">&#x1F4C5; Requested: ${new Date(g.createdAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#F0F5F5;border-radius:10px;padding:6px 10px;margin-bottom:8px">
+          <label style="font-size:.68rem;font-weight:700;color:#4A6464;white-space:nowrap">&#x1F465; Member Limit</label>
+          <input type="number" id="sa-limit-gym-${esc(String(g.id))}" placeholder="&#x221E; (unlimited)" min="0" style="flex:1;padding:6px 8px;border:1.5px solid #E0ECEC;border-radius:7px;font-family:inherit;font-size:.78rem">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="saApproveGym('${esc(String(g.id))}','${esc(g.name)}')"
+            style="flex:1;padding:9px;background:#27AE60;color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:700;font-size:.82rem;cursor:pointer">
+            &#x2705; Approve Gym
+          </button>
+          <button onclick="saOpenReject('gym','${esc(String(g.id))}')"
             style="flex:1;padding:9px;background:#E74C3C;color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:700;font-size:.82rem;cursor:pointer">
             &#x274C; Reject
           </button>
@@ -3533,6 +3519,12 @@ async function loadSaGyms() {
             ${active ? '&#x1F534; Block' : '&#x1F7E2; Enable'}
           </button>
         </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#F0F5F5;border-radius:10px;padding:6px 10px;margin-top:10px">
+          <label style="font-size:.68rem;font-weight:700;color:#4A6464;white-space:nowrap">&#x1F465; Member Limit</label>
+          <input type="number" id="sa-editlimit-${esc(u._id)}" value="${u.memberLimit != null ? u.memberLimit : ''}" placeholder="&#x221E; (unlimited)" min="0" style="flex:1;padding:6px 8px;border:1.5px solid #E0ECEC;border-radius:7px;font-family:inherit;font-size:.78rem">
+          <button onclick="saSetLimit('${esc(u._id)}','${esc(u.gymName||u.name)}')"
+            style="padding:6px 12px;border-radius:7px;border:none;background:#1A8C8C;color:#fff;font-family:inherit;font-size:.7rem;font-weight:700;cursor:pointer;flex-shrink:0">Save</button>
+        </div>
       </div>`;
     }).join('');
   } catch(e) {
@@ -3540,25 +3532,65 @@ async function loadSaGyms() {
   }
 }
 
-async function saApprove(userId, name) {
+async function saSetLimit(userId, name) {
+  const input = document.getElementById(`sa-editlimit-${userId}`);
+  const limitVal = input && input.value.trim() !== '' ? Number(input.value) : null;
   try {
-    const res = await fetch(`${BASE}/auth/approve/${userId}`, { method:'POST', headers:hdrs() });
+    const res = await fetch(`${BASE}/admin/gym/${userId}/member-limit`, {
+      method: 'PATCH', headers: hdrs(),
+      body: JSON.stringify({ limit: limitVal })
+    });
     const data = await res.json();
-    if (res.ok) { toast(`&#x2705; ${name} approved!`, 'success'); loadSuperAdminData(); }
+    if (res.ok) { toast(data.message || `${name} limit updated`, 'success'); }
+    else toast(data.error || 'Failed to update limit', 'error');
+  } catch(e) { toast('Network error', 'error'); }
+}
+
+async function saApprove(userId, name) {
+  const limitInput = document.getElementById(`sa-limit-${userId}`);
+  const limitVal = limitInput && limitInput.value.trim() !== '' ? Number(limitInput.value) : null;
+  try {
+    const res = await fetch(`${BASE}/auth/approve/${userId}`, {
+      method:'POST', headers:hdrs(),
+      body: JSON.stringify({ memberLimit: limitVal })
+    });
+    const data = await res.json();
+    if (res.ok) { toast(`&#x2705; ${name} approved${limitVal ? ` &mdash; limit: ${limitVal} members` : ''}!`, 'success'); loadSuperAdminData(); }
     else toast(data.error||'Failed', 'error');
   } catch(e) { toast('Network error','error'); }
 }
 
-function saOpenReject(userId) {
-  _saRejectId = userId;
+/* Manage Gym — approve/reject an additional gym an existing admin added */
+async function saApproveGym(gymId, name) {
+  const limitInput = document.getElementById(`sa-limit-gym-${gymId}`);
+  const limitVal = limitInput && limitInput.value.trim() !== '' ? Number(limitInput.value) : null;
+  try {
+    const res = await fetch(`${BASE}/admin/approve-gym/${gymId}`, {
+      method: 'POST', headers: hdrs(),
+      body: JSON.stringify({ memberLimit: limitVal })
+    });
+    const data = await res.json();
+    if (res.ok) { toast(data.message || `${name} approved${limitVal ? ` &mdash; limit: ${limitVal} members` : ''}`, 'success'); loadSuperAdminData(); }
+    else toast(data.error || 'Failed to approve', 'error');
+  } catch(e) { toast('Network error', 'error'); }
+}
+
+function saOpenReject(kind, id) {
+  _saRejectKind = kind; // 'admin' (new gym owner registration) or 'gym' (additional gym request)
+  _saRejectId = id;
+  const titleEl = document.getElementById('saRejectModalTitle');
+  if (titleEl) titleEl.textContent = kind === 'gym' ? '\u274C Reject Additional Gym Request' : '\u274C Reject Registration';
   document.getElementById('saRejectReason').value = '';
   document.getElementById('saRejectModal').style.display = 'flex';
 }
 
 async function confirmSaReject() {
   const reason = document.getElementById('saRejectReason').value.trim() || 'Not approved.';
+  const url = _saRejectKind === 'gym'
+    ? `${BASE}/admin/reject-gym/${_saRejectId}`
+    : `${BASE}/auth/reject/${_saRejectId}`;
   try {
-    const res = await fetch(`${BASE}/auth/reject/${_saRejectId}`, {
+    const res = await fetch(url, {
       method:'POST', headers:hdrs(), body:JSON.stringify({ reason })
     });
     const data = await res.json();
@@ -3583,55 +3615,74 @@ async function saToggleGym(userId) {
    GYM ADMIN FUNCTIONS
 ================================================================ */
 async function loadGymAdminData() {
-  await Promise.all([loadGaPending(), loadGaStaff(), loadGaPasswordResets()]);
+  await Promise.all([loadGaPending(), loadGaStaff(), loadGaResets()]);
 }
 
-async function loadGaPasswordResets() {
-  const el = document.getElementById('gaPwList');
+async function loadGaResets() {
+  const el = document.getElementById('gaResetList');
   if (!el) return;
   try {
     const res = await fetch(`${BASE}/admin/pending-staff-password-resets`, { headers: hdrs() });
     if (!res.ok) throw new Error();
     const list = await res.json();
-    const badge = document.getElementById('gaPwBadge');
+    const badge = document.getElementById('gaResetBadge');
     if (badge) badge.textContent = list.length;
     if (!list.length) {
-      el.innerHTML = '<div class="empty"><div class="ei">&#x2705;</div><p>No pending resets</p></div>';
+      el.innerHTML = '<div class="empty"><div class="ei">&#x2705;</div><p>No pending requests</p></div>';
       return;
     }
     el.innerHTML = list.map(s => `
-      <div style="padding:12px 16px;border-bottom:1px solid #F0F5F5;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div>
-          <div style="font-weight:800;font-size:.88rem;color:#1A2E2E">${esc(s.name)}</div>
-          <div style="font-size:.72rem;color:#8AABAB">${esc(s.email)}</div>
+      <div style="padding:12px 16px;border-bottom:1px solid #F0F5F5">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#E74C3C,#C0392B);
+            display:flex;align-items:center;justify-content:center;color:#fff;font-size:.9rem;font-weight:800;flex-shrink:0">
+            ${esc((s.name||'?')[0].toUpperCase())}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:800;font-size:.9rem;color:#1A2E2E">${esc(s.name)}</div>
+            <div style="font-size:.72rem;color:#8AABAB">${esc(s.email)}</div>
+            <div style="font-size:.65rem;color:#B0C4C4;margin-top:1px">&#x1F4C5; ${s.resetRequestedAt ? new Date(s.resetRequestedAt).toLocaleDateString('en-IN') : ''}</div>
+          </div>
         </div>
-        <div style="display:flex;gap:6px">
-          <button onclick="gaApprovePwReset('${esc(s._id)}')" style="padding:7px 12px;background:#27AE60;color:#fff;border:none;border-radius:9px;font-family:inherit;font-weight:700;font-size:.76rem;cursor:pointer">&#x2705; Approve</button>
-          <button onclick="gaRejectPwReset('${esc(s._id)}')" style="padding:7px 12px;background:#E74C3C;color:#fff;border:none;border-radius:9px;font-family:inherit;font-weight:700;font-size:.76rem;cursor:pointer">&#x274C; Reject</button>
+        <input type="text" id="staffnewpwd-${esc(s._id)}" placeholder="New password (6+ chars)"
+          style="width:100%;padding:9px 11px;border:2px solid #E0ECEC;border-radius:9px;font-family:inherit;font-size:.82rem;margin-bottom:8px">
+        <div style="display:flex;gap:7px">
+          <button onclick="gaApproveReset('${esc(s._id)}','${esc(s.name)}')"
+            style="flex:1;padding:8px;background:#27AE60;color:#fff;border:none;border-radius:9px;font-family:inherit;font-weight:700;font-size:.8rem;cursor:pointer">
+            &#x2705; Set & Approve
+          </button>
+          <button onclick="gaRejectReset('${esc(s._id)}','${esc(s.name)}')"
+            style="flex:1;padding:8px;background:#E74C3C;color:#fff;border:none;border-radius:9px;font-family:inherit;font-weight:700;font-size:.8rem;cursor:pointer">
+            &#x274C; Dismiss
+          </button>
         </div>
       </div>`).join('');
-  } catch (e) {
-    el.innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading</p></div>';
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><p style="color:#E74C3C">Error</p></div>';
   }
 }
 
-async function gaApprovePwReset(staffId) {
+async function gaApproveReset(staffId, name) {
+  const pwdInput = document.getElementById(`staffnewpwd-${staffId}`);
+  const newPassword = pwdInput ? pwdInput.value.trim() : '';
+  if (!newPassword || newPassword.length < 6) { toast('Enter a password (6+ characters) first', 'error'); return; }
   try {
-    const res = await fetch(`${BASE}/admin/approve-staff-password-reset/${staffId}`, { method: 'POST', headers: hdrs() });
+    const res = await fetch(`${BASE}/admin/approve-staff-password-reset/${staffId}`, {
+      method: 'POST', headers: hdrs(), body: JSON.stringify({ newPassword })
+    });
     const data = await res.json();
-    toast(data.message || (res.ok ? 'Approved' : 'Failed'), res.ok ? 'success' : 'error');
-    loadGaPasswordResets();
-  } catch (e) { toast('Network error', 'error'); }
+    if (res.ok) { toast(data.message || `Password reset for ${name}`, 'success'); loadGaResets(); }
+    else toast(data.error || 'Failed', 'error');
+  } catch(e) { toast('Network error', 'error'); }
 }
 
-async function gaRejectPwReset(staffId) {
-  if (!confirm('Reject this password reset request?')) return;
+async function gaRejectReset(staffId, name) {
   try {
     const res = await fetch(`${BASE}/admin/reject-staff-password-reset/${staffId}`, { method: 'POST', headers: hdrs() });
     const data = await res.json();
-    toast(data.message || (res.ok ? 'Rejected' : 'Failed'), res.ok ? 'success' : 'error');
-    loadGaPasswordResets();
-  } catch (e) { toast('Network error', 'error'); }
+    if (res.ok) { toast(data.message || 'Dismissed', 'success'); loadGaResets(); }
+    else toast(data.error || 'Failed', 'error');
+  } catch(e) { toast('Network error', 'error'); }
 }
 
 async function loadGaPending() {
@@ -3866,31 +3917,26 @@ window.addEventListener('DOMContentLoaded', async () => {
       sbUser.innerHTML = `<div class="u-name">&#x1F464; ${esc(u.name)}</div><div class="u-role">${roleLabel}</div>`;
     }
 
-    // Topbar gym-name badge — which gym you're currently managing
-    const gymBadge = document.getElementById('topGymBadge');
-    if (gymBadge && (u.role === 'admin' || u.role === 'staff')) {
-      gymBadge.textContent = '🏢 ' + esc(u.gymName || 'My Gym');
-      gymBadge.style.display = 'inline-block';
+    // Show which gym is currently active — important once an owner has
+    // more than one gym via Manage Gym, so it's always clear which gym's
+    // data you're looking at.
+    if (u.role !== 'superadmin') {
+      const gymBanner = document.getElementById('activeGymBanner');
+      const gymNameEl = document.getElementById('activeGymName');
+      if (gymBanner && gymNameEl) {
+        gymNameEl.textContent = u.gymName || 'My Gym';
+        gymBanner.style.display = 'block';
+      }
     }
 
     if (u.role === 'superadmin') {
-      _isSuperAdmin = true;
-      // Hide ALL gym pages - show only control panel
-      document.querySelectorAll('.page').forEach(p => { p.style.display='none'; p.classList.remove('active'); });
-      const saPage = document.getElementById('page-superadmin');
-      if (saPage) { saPage.style.display='block'; saPage.classList.add('active'); }
-      // Hide bottom nav - superadmin only needs the panel
-      const bnav = document.querySelector('.bottom-nav');
-      if (bnav) bnav.style.display = 'none';
-      // Top bar title
-      const topTitle = document.querySelector('.top-bar .page-title');
-      if (topTitle) topTitle.textContent = 'GymPro Control Panel';
-      // Email label
-      const saLabel = document.getElementById('saEmailLabel');
-      if (saLabel) saLabel.textContent = u.email || '';
-      // Load and auto-refresh every 30s
-      loadSuperAdminData();
-      setInterval(loadSaPending, 30000);
+      // Superadmin has its own dedicated page (superadmin.html) with the
+      // real Manage Gym / approval logic — index.html never had a working
+      // implementation of it (the page-superadmin div here was dead,
+      // incomplete markup). Redirect immediately instead of showing a
+      // broken partial dashboard.
+      window.location.href = '/superadmin.html';
+      return;
 
     } else if (u.role === 'admin') {
       // Show Staff Mgmt in sidebar
