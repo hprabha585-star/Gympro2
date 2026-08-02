@@ -49,7 +49,14 @@ const User = sequelize.define('User', {
 
   isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
   lastLogin: { type: DataTypes.DATE, allowNull: true },
-  gymData: { type: DataTypes.TEXT, defaultValue: '{}' }
+  gymData: { type: DataTypes.TEXT, defaultValue: '{}' },
+
+  // Password reset requires approval (superadmin for an admin's own
+  // account, the gym admin for their staff). The new password is hashed
+  // immediately and held here — the real `password` field is left
+  // untouched (and still works for login) until approved.
+  pendingPasswordHash: { type: DataTypes.STRING, allowNull: true, defaultValue: null },
+  pendingPasswordRequestedAt: { type: DataTypes.DATE, allowNull: true, defaultValue: null }
 }, {
   tableName: 'users',
   timestamps: true,
