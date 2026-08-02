@@ -142,6 +142,7 @@
       <div id="admin-login">
         <div class="field"><label>Email</label><input type="email" id="ad-email" placeholder="you@email.com" autocomplete="email"></div>
         <div class="field"><label>Password</label><div style="position:relative"><input type="password" id="ad-pass" placeholder="Password" autocomplete="current-password"><button type="button" onclick="togglePw('ad-pass', this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;padding:4px;color:#8AABAB" aria-label="Show password">👁️</button></div></div>
+        <div style="text-align:right;margin-top:-6px;margin-bottom:10px"><a href="#" onclick="openForgotPassword('admin');return false;" style="font-size:.74rem;color:#1A8C8C;font-weight:700;text-decoration:none">Forgot password?</a></div>
         <button class="btn" onclick="doLogin('admin')">Login</button>
       </div>
 
@@ -167,6 +168,7 @@
       <div id="staff-login">
         <div class="field"><label>Email</label><input type="email" id="st-email" placeholder="your@email.com" autocomplete="email"></div>
         <div class="field"><label>Password</label><div style="position:relative"><input type="password" id="st-pass" placeholder="Password" autocomplete="current-password"><button type="button" onclick="togglePw('st-pass', this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;padding:4px;color:#8AABAB" aria-label="Show password">👁️</button></div></div>
+        <div style="text-align:right;margin-top:-6px;margin-bottom:10px"><a href="#" onclick="openForgotPassword('staff');return false;" style="font-size:.74rem;color:#1A8C8C;font-weight:700;text-decoration:none">Forgot password?</a></div>
         <button class="btn" onclick="doLogin('staff')">Login</button>
       </div>
 
@@ -417,6 +419,30 @@ async function doRegisterStaff() {
     showMsg('msg-st','Network error.','error');
     btn.disabled=false; btn.textContent='Send Request to Admin';
   }
+}
+
+/* ── Forgot password (admin/staff only — approval required before it takes effect) ── */
+function openForgotPassword(role) {
+  const email = prompt(`Enter your ${role === 'admin' ? 'Gym Admin' : 'Staff'} account email:`);
+  if (!email || !email.trim()) return;
+  const newPassword = prompt('Enter the new password you want (min 6 characters):');
+  if (!newPassword) return;
+  if (newPassword.length < 6) { alert('Password must be at least 6 characters.'); return; }
+  const confirmPassword = prompt('Re-enter the new password to confirm:');
+  if (newPassword !== confirmPassword) { alert('Passwords did not match — please try again.'); return; }
+
+  fetch(`${API}/request-password-reset`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim(), newPassword })
+  })
+    .then(r => r.json())
+    .then(data => {
+      alert(data.message || data.error ||
+        (role === 'admin'
+          ? 'Request submitted — the GymPro team must approve it before your new password works.'
+          : 'Request submitted — your gym admin must approve it before your new password works.'));
+    })
+    .catch(() => alert('Network error — please try again.'));
 }
 
 // Default: show admin view
