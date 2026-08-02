@@ -100,6 +100,14 @@
     <div id="pendingGymsList"><div class="empty"><div class="ei">✨</div><p>Loading…</p></div></div>
   </div>
 
+  <!-- 3. Pending Admin Password Resets -->
+  <div class="section">
+    <div class="sec-head">
+      <div class="sec-head-left">🔑 Pending Password Resets <span class="badge-count red" id="pendingResetsBadge">0</span></div>
+    </div>
+    <div id="pendingResetsList"><div class="empty"><div class="ei">✨</div><p>Loading…</p></div></div>
+  </div>
+
 </div>
 
 <div class="modal-bg" id="rejectModal">
@@ -161,7 +169,67 @@ function gymAv(name) {
 }
 
 async function loadAll() {
-  await Promise.all([ loadPending(), loadPendingGyms() ]);
+  await Promise.all([ loadPending(), loadPendingGyms(), loadPendingResets() ]);
+}
+
+async function loadPendingResets() {
+  try {
+    const res = await fetch(`${BASE}/auth/pending-password-resets`, { headers: hdrs() });
+    if (res.status === 401) { logout(); return; }
+    const list = await res.json();
+
+    document.getElementById('pendingResetsBadge').textContent = list.length;
+    const el = document.getElementById('pendingResetsList');
+    if (!list.length) {
+      el.innerHTML = '<div class="empty"><div class="ei">✅</div><p>No pending password resets</p></div>';
+      return;
+    }
+
+    el.innerHTML = list.map(u => `
+      <div class="gym-card">
+        <div class="gym-av-wrap">
+          ${gymAv(u.gymName || u.name)}
+          <div class="gym-info" style="flex:1;min-width:0">
+            <h3>${esc(u.gymName || u.name)}</h3>
+            <div class="gym-email">👤 ${esc(u.name)} &nbsp;|&nbsp; ✉️ ${esc(u.email)}</div>
+            <div class="reg-date">📅 Requested: ${fDate(u.resetRequestedAt)}</div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <div class="limit-field" style="flex:1;min-width:160px">
+            <label>🔑 New pwd</label>
+            <input type="text" id="newpwd-${esc(u._id)}" placeholder="6+ characters" style="width:100%">
+          </div>
+          <button class="btn btn-approve" onclick="approvePasswordReset('${esc(u._id)}','${esc(u.name)}')">✅ Set & Approve</button>
+          <button class="btn btn-reject" onclick="rejectPasswordReset('${esc(u._id)}','${esc(u.name)}')">❌ Dismiss</button>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('pendingResetsList').innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading</p></div>';
+  }
+}
+
+async function approvePasswordReset(userId, name) {
+  const pwdInput = document.getElementById(`newpwd-${userId}`);
+  const newPassword = pwdInput ? pwdInput.value.trim() : '';
+  if (!newPassword || newPassword.length < 6) { toast('Enter a password (6+ characters) first', 'error'); return; }
+  try {
+    const res = await fetch(`${BASE}/auth/approve-password-reset/${userId}`, {
+      method: 'POST', headers: hdrs(), body: JSON.stringify({ newPassword })
+    });
+    const data = await res.json();
+    if (res.ok) { toast(data.message || `Password reset for ${name}`, 'success'); loadPendingResets(); }
+    else toast(data.error || 'Failed', 'error');
+  } catch(e) { toast('Network error', 'error'); }
+}
+
+async function rejectPasswordReset(userId, name) {
+  try {
+    const res = await fetch(`${BASE}/auth/reject-password-reset/${userId}`, { method: 'POST', headers: hdrs() });
+    const data = await res.json();
+    if (res.ok) { toast(data.message || `Dismissed`, 'success'); loadPendingResets(); }
+    else toast(data.error || 'Failed', 'error');
+  } catch(e) { toast('Network error', 'error'); }
 }
 
 async function loadPending() {
