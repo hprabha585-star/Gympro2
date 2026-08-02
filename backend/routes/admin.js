@@ -1,5 +1,6 @@
 const express = require('express');
 const router  = express.Router();
+const { Op } = require('sequelize');
 const { User, Gym } = require('../models');
 const { verifyToken, adminOnly, superAdminOnly } = require('./auth');
 
@@ -208,6 +209,46 @@ router.delete('/user/:userId', verifyToken, adminOnly, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found.' });
     await user.destroy();
     res.json({ message: `${user.name} deleted.` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Staff password resets — the gym admin approves their own staff's requests ──
+
+router.get('/pending-staff-password-resets', verifyToken, adminOnly, async (req, res) => {
+  try {
+    const gymId = req.user.userId;
+    const list = await User.findAll({
+      where: { role: 'staff', gymId, pendingPasswordHash: { [Op.ne]: null } },
+      attributes: { exclude: ['password', 'pendingPasswordHash'] },
+      order: [['pendingPasswordRequestedAt', 'DESC']]
+    });
+    res.json(list);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/approve-staff-password-reset/:staffId', verifyToken, adminOnly, async (req, res) => {
+  try {
+    const staff = await User.findByPk(req.params.staffId);
+    if (!staff || staff.role !== 'staff' || Number(staff.gymId) !== Number(req.user.userId) || !staff.pendingPasswordHash)
+      return res.status(404).json({ error: 'No pending password reset for this staff member.' });
+
+    staff.password = staff.pendingPasswordHash; // already bcrypt-hashed
+    staff.pendingPasswordHash = null;
+    staff.pendingPasswordRequestedAt = null;
+    await staff.save({ hooks: false }); // must NOT re-hash an already-hashed value
+    res.json({ message: `Password reset approved for ${staff.name}.` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/reject-staff-password-reset/:staffId', verifyToken, adminOnly, async (req, res) => {
+  try {
+    const staff = await User.findByPk(req.params.staffId);
+    if (!staff || staff.role !== 'staff' || Number(staff.gymId) !== Number(req.user.userId))
+      return res.status(404).json({ error: 'Staff member not found.' });
+    staff.pendingPasswordHash = null;
+    staff.pendingPasswordRequestedAt = null;
+    await staff.save({ hooks: false });
+    res.json({ message: 'Rejected.' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
