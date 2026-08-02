@@ -3069,6 +3069,26 @@ async function confirmPayment() {
   }
 }
 
+/* ── SELF-SERVICE PASSWORD RESET (from inside the app, Settings page) ── */
+async function requestMyPasswordReset() {
+  const u = JSON.parse(localStorage.getItem('user') || '{}');
+  if (!u.email) { toast('Could not find your account email', 'error'); return; }
+  const newPassword = prompt(`Enter a new password for ${u.email} (min 6 characters):`);
+  if (!newPassword) return;
+  if (newPassword.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
+  const confirmPassword = prompt('Re-enter the new password to confirm:');
+  if (newPassword !== confirmPassword) { toast('Passwords did not match', 'error'); return; }
+
+  try {
+    const res = await fetch(`${BASE}/auth/request-password-reset`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: u.email, newPassword })
+    });
+    const data = await res.json();
+    toast(data.message || data.error || 'Request submitted', res.ok ? 'success' : 'error');
+  } catch (e) { toast('Network error', 'error'); }
+}
+
 /* ── SETTINGS ── */
 function loadSettings() {
   const upiIdEl = document.getElementById('sUpiId');
@@ -3382,7 +3402,55 @@ async function sendReminderFromCard(memberId) {
 let _saRejectId = null;
 
 async function loadSuperAdminData() {
-  await Promise.all([loadSaPending(), loadSaGyms()]);
+  await Promise.all([loadSaPending(), loadSaGyms(), loadSaPasswordResets()]);
+}
+
+async function loadSaPasswordResets() {
+  const el = document.getElementById('saPwList');
+  if (!el) return;
+  try {
+    const res = await fetch(`${BASE}/auth/pending-password-resets`, { headers: hdrs() });
+    if (res.status === 401) { logout(); return; }
+    const list = await res.json();
+    const badge = document.getElementById('saPwBadge');
+    if (badge) badge.textContent = list.length;
+    if (!list.length) {
+      el.innerHTML = '<div class="empty"><div class="ei">&#x2705;</div><p>No pending password resets</p></div>';
+      return;
+    }
+    el.innerHTML = list.map(u => `
+      <div style="padding:12px 16px;border-bottom:1px solid #F0F5F5;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:800;font-size:.88rem;color:#1A2E2E">${esc(u.gymName || u.name)}</div>
+          <div style="font-size:.72rem;color:#8AABAB">${esc(u.email)}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="saApprovePwReset('${esc(u._id)}')" style="padding:7px 12px;background:#27AE60;color:#fff;border:none;border-radius:9px;font-family:inherit;font-weight:700;font-size:.76rem;cursor:pointer">&#x2705; Approve</button>
+          <button onclick="saRejectPwReset('${esc(u._id)}')" style="padding:7px 12px;background:#E74C3C;color:#fff;border:none;border-radius:9px;font-family:inherit;font-weight:700;font-size:.76rem;cursor:pointer">&#x274C; Reject</button>
+        </div>
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading</p></div>';
+  }
+}
+
+async function saApprovePwReset(userId) {
+  try {
+    const res = await fetch(`${BASE}/auth/approve-password-reset/${userId}`, { method: 'POST', headers: hdrs() });
+    const data = await res.json();
+    toast(data.message || (res.ok ? 'Approved' : 'Failed'), res.ok ? 'success' : 'error');
+    loadSaPasswordResets();
+  } catch (e) { toast('Network error', 'error'); }
+}
+
+async function saRejectPwReset(userId) {
+  if (!confirm('Reject this password reset request?')) return;
+  try {
+    const res = await fetch(`${BASE}/auth/reject-password-reset/${userId}`, { method: 'POST', headers: hdrs() });
+    const data = await res.json();
+    toast(data.message || (res.ok ? 'Rejected' : 'Failed'), res.ok ? 'success' : 'error');
+    loadSaPasswordResets();
+  } catch (e) { toast('Network error', 'error'); }
 }
 
 async function loadSaPending() {
@@ -3515,7 +3583,55 @@ async function saToggleGym(userId) {
    GYM ADMIN FUNCTIONS
 ================================================================ */
 async function loadGymAdminData() {
-  await Promise.all([loadGaPending(), loadGaStaff()]);
+  await Promise.all([loadGaPending(), loadGaStaff(), loadGaPasswordResets()]);
+}
+
+async function loadGaPasswordResets() {
+  const el = document.getElementById('gaPwList');
+  if (!el) return;
+  try {
+    const res = await fetch(`${BASE}/admin/pending-staff-password-resets`, { headers: hdrs() });
+    if (!res.ok) throw new Error();
+    const list = await res.json();
+    const badge = document.getElementById('gaPwBadge');
+    if (badge) badge.textContent = list.length;
+    if (!list.length) {
+      el.innerHTML = '<div class="empty"><div class="ei">&#x2705;</div><p>No pending resets</p></div>';
+      return;
+    }
+    el.innerHTML = list.map(s => `
+      <div style="padding:12px 16px;border-bottom:1px solid #F0F5F5;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:800;font-size:.88rem;color:#1A2E2E">${esc(s.name)}</div>
+          <div style="font-size:.72rem;color:#8AABAB">${esc(s.email)}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="gaApprovePwReset('${esc(s._id)}')" style="padding:7px 12px;background:#27AE60;color:#fff;border:none;border-radius:9px;font-family:inherit;font-weight:700;font-size:.76rem;cursor:pointer">&#x2705; Approve</button>
+          <button onclick="gaRejectPwReset('${esc(s._id)}')" style="padding:7px 12px;background:#E74C3C;color:#fff;border:none;border-radius:9px;font-family:inherit;font-weight:700;font-size:.76rem;cursor:pointer">&#x274C; Reject</button>
+        </div>
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading</p></div>';
+  }
+}
+
+async function gaApprovePwReset(staffId) {
+  try {
+    const res = await fetch(`${BASE}/admin/approve-staff-password-reset/${staffId}`, { method: 'POST', headers: hdrs() });
+    const data = await res.json();
+    toast(data.message || (res.ok ? 'Approved' : 'Failed'), res.ok ? 'success' : 'error');
+    loadGaPasswordResets();
+  } catch (e) { toast('Network error', 'error'); }
+}
+
+async function gaRejectPwReset(staffId) {
+  if (!confirm('Reject this password reset request?')) return;
+  try {
+    const res = await fetch(`${BASE}/admin/reject-staff-password-reset/${staffId}`, { method: 'POST', headers: hdrs() });
+    const data = await res.json();
+    toast(data.message || (res.ok ? 'Rejected' : 'Failed'), res.ok ? 'success' : 'error');
+    loadGaPasswordResets();
+  } catch (e) { toast('Network error', 'error'); }
 }
 
 async function loadGaPending() {
@@ -3748,6 +3864,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (sbUser && u.name) {
       const roleLabel = u.role==='superadmin' ? 'GymPro Creator' : u.role==='admin' ? 'Gym Admin' : 'Staff Member';
       sbUser.innerHTML = `<div class="u-name">&#x1F464; ${esc(u.name)}</div><div class="u-role">${roleLabel}</div>`;
+    }
+
+    // Topbar gym-name badge — which gym you're currently managing
+    const gymBadge = document.getElementById('topGymBadge');
+    if (gymBadge && (u.role === 'admin' || u.role === 'staff')) {
+      gymBadge.textContent = '🏢 ' + esc(u.gymName || 'My Gym');
+      gymBadge.style.display = 'inline-block';
     }
 
     if (u.role === 'superadmin') {
