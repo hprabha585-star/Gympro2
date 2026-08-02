@@ -100,8 +100,18 @@ router.post('/', async (req, res) => {
     const newMember = await Member.create({ ...memberData, userId: gymId });
     res.status(201).json(newMember);
   } catch (err) {
-    console.error('Add member error:', err);
-    res.status(400).json({ error: err.message });
+    // Log on separate lines — a single long line (the previous behavior)
+    // was getting visually cut off in the hosting panel's log viewer,
+    // hiding the actual cause behind "Add member error: Error".
+    console.error('❌ Add member error — name:', err.name);
+    console.error('❌ Add member error — message:', err.message);
+    if (err.errors && err.errors.length) {
+      err.errors.forEach((e, i) => console.error(`❌ Add member error — detail ${i + 1}:`, e.message, '| field:', e.path, '| value:', e.value));
+    }
+    if (err.parent) console.error('❌ Add member error — DB detail:', err.parent.sqlMessage || err.parent.message);
+
+    const detail = (err.errors && err.errors[0]?.message) || err.parent?.sqlMessage || err.message || 'Unknown error';
+    res.status(400).json({ error: detail });
   }
 });
 
