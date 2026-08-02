@@ -153,8 +153,10 @@
 <div class="topbar">
   <button class="menu-btn" onclick="toggleSidebar()">☰</button>
   <span class="topbar-title" id="pageTitle">Dashboard</span>
-  <span class="topbar-gym" id="topGymBadge" style="display:none;font-size:.65rem;font-weight:800;color:#fff;background:rgba(255,255,255,.2);padding:4px 10px;border-radius:20px;white-space:nowrap;margin-right:6px"></span>
   <span class="topbar-date" id="topDate"></span>
+</div>
+<div id="activeGymBanner" style="display:none;background:#1A2E2E;color:#fff;padding:7px 16px;font-size:.75rem;font-weight:700;text-align:center;letter-spacing:.3px">
+  🏢 <span id="activeGymName">—</span>
 </div>
 
 <div id="offline-banner">⚠️ You are offline — viewing saved data.</div>
@@ -554,15 +556,6 @@
       </div>
       <button class="btn btn-primary btn-full" onclick="saveSettings()">Save Fee Settings</button>
     </div>
-
-    <div class="card">
-      <h3 style="font-size:.95rem;font-weight:800;color:var(--tx);margin-bottom:.75rem;
-                 display:flex;align-items:center;gap:7px;">
-        <span>🔑</span> Account Security
-      </h3>
-      <p class="sync-note" style="margin-bottom:.9rem">Password changes require approval before they take effect — your current password keeps working until then.</p>
-      <button class="btn btn-ghost btn-full" onclick="requestMyPasswordReset()">Reset My Password</button>
-    </div>
   </div>
 
 
@@ -572,32 +565,37 @@
       <div style="font-size:1.1rem;font-weight:800;color:#fff">🏆 GymPro Control Panel</div>
       <div style="font-size:.72rem;color:rgba(255,255,255,.5);margin-top:2px" id="saEmailLabel"></div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
-      <div style="background:#fff;border-radius:14px;padding:14px;text-align:center;border:1px solid #E0ECEC">
-        <div style="font-size:1.7rem;font-weight:800;color:#E74C3C;line-height:1" id="saPending">-</div>
-        <div style="font-size:.6rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Pending</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+      <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;border:1px solid #E0ECEC">
+        <div style="font-size:1.5rem;font-weight:800;color:#E74C3C;line-height:1" id="saPending">-</div>
+        <div style="font-size:.56rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Pending</div>
       </div>
-      <div style="background:#fff;border-radius:14px;padding:14px;text-align:center;border:1px solid #E0ECEC">
-        <div style="font-size:1.7rem;font-weight:800;color:#27AE60;line-height:1" id="saActiveCount">-</div>
-        <div style="font-size:.6rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Active Gyms</div>
+      <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;border:1px solid #E0ECEC">
+        <div style="font-size:1.5rem;font-weight:800;color:#D97706;line-height:1" id="saPendingGymsCount">-</div>
+        <div style="font-size:.56rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Gym Requests</div>
       </div>
-      <div style="background:#fff;border-radius:14px;padding:14px;text-align:center;border:1px solid #E0ECEC">
-        <div style="font-size:1.7rem;font-weight:800;color:#1A8C8C;line-height:1" id="saTotal">-</div>
-        <div style="font-size:.6rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Total Gyms</div>
+      <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;border:1px solid #E0ECEC">
+        <div style="font-size:1.5rem;font-weight:800;color:#27AE60;line-height:1" id="saActiveCount">-</div>
+        <div style="font-size:.56rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Active Gyms</div>
+      </div>
+      <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;border:1px solid #E0ECEC">
+        <div style="font-size:1.5rem;font-weight:800;color:#1A8C8C;line-height:1" id="saTotal">-</div>
+        <div style="font-size:.56rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Total Gyms</div>
       </div>
     </div>
     <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
       <div style="padding:12px 16px;background:#FEF9E7;border-bottom:1.5px solid #FDE68A;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
-        <span>⏳ Pending Approvals <span id="saPendingBadge" style="background:#E74C3C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
+        <span>⏳ Pending Admin Approvals <span id="saPendingBadge" style="background:#E74C3C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
         <button onclick="loadSuperAdminData()" style="background:#F0F5F5;border:1px solid #E0ECEC;border-radius:8px;padding:5px 11px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit">🔄</button>
       </div>
       <div id="saPendingList"><div class="empty"><div class="ei">✅</div><p>Loading...</p></div></div>
     </div>
+    <!-- Manage Gym: additional-gym requests from existing admins, awaiting superadmin approval -->
     <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
-      <div style="padding:12px 16px;background:#FEF3E7;border-bottom:1.5px solid #FDE68A;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
-        <span>🔑 Pending Password Resets <span id="saPwBadge" style="background:#E74C3C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
+      <div style="padding:12px 16px;background:#FEF3E2;border-bottom:1.5px solid #FCD9A8;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
+        <span>🏢 Manage Gym — Pending Gym Approvals <span id="saPendingGymsBadge" style="background:#D97706;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
       </div>
-      <div id="saPwList"><div class="empty"><p>Loading...</p></div></div>
+      <div id="saPendingGymsList"><div class="empty"><div class="ei">✅</div><p>Loading...</p></div></div>
     </div>
     <div style="background:#fff;border-radius:18px;overflow:hidden;border:1px solid #E0ECEC">
       <div style="padding:12px 16px;background:#F8FFFE;border-bottom:1.5px solid #E0ECEC;font-weight:800;font-size:.9rem">
@@ -607,7 +605,7 @@
     </div>
     <div id="saRejectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;align-items:center;justify-content:center;padding:16px">
       <div style="background:#fff;border-radius:18px;padding:20px;width:100%;max-width:380px">
-        <div style="font-size:1rem;font-weight:800;margin-bottom:10px;color:#1A2E2E">❌ Reject Registration</div>
+        <div style="font-size:1rem;font-weight:800;margin-bottom:10px;color:#1A2E2E" id="saRejectModalTitle">❌ Reject Registration</div>
         <textarea id="saRejectReason" placeholder="Reason..." style="width:100%;padding:10px;border:2px solid #E0ECEC;border-radius:10px;font-family:inherit;font-size:.88rem;min-height:60px;resize:none"></textarea>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button onclick="document.getElementById('saRejectModal').style.display='none'" style="flex:1;padding:10px;border:1px solid #E0ECEC;border-radius:10px;background:#F0F5F5;font-family:inherit;font-weight:700;cursor:pointer">Cancel</button>
@@ -646,10 +644,10 @@
 
     <!-- Pending Staff Password Resets -->
     <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
-      <div style="padding:12px 16px;background:#FEF3E7;border-bottom:1.5px solid #FDE68A;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
-        <span>🔑 Staff Password Resets <span id="gaPwBadge" style="background:#E74C3C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
+      <div style="padding:12px 16px;background:#FEECEB;border-bottom:1.5px solid #F5C6C0;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
+        <span>🔑 Password Reset Requests <span id="gaResetBadge" style="background:#E74C3C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
       </div>
-      <div id="gaPwList"><div class="empty"><div class="ei">✅</div><p>No pending resets</p></div></div>
+      <div id="gaResetList"><div class="empty"><div class="ei">✅</div><p>No pending requests</p></div></div>
     </div>
 
     <!-- Create Staff manually -->
