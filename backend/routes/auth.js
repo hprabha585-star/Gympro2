@@ -1,456 +1,406 @@
 const express = require('express');
-const router  = express.Router();
-const jwt     = require('jsonwebtoken');
+const router = express.Router();
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const { Op } = require('sequelize');
 const { User, Gym } = require('../models');
-const { body, validationResult } = require('express-validator');
 
-const JWT_SECRET  = process.env.JWT_SECRET || 'gympro_secret_key_2024';
-const JWT_EXPIRES = '7d';
+const JWT_SECRET = process.env.JWT_SECRET || 'gympro_secret_key_2024';
+const TOKEN_EXPIRY = '30d';
 
-/* ─── helpers ────────────────────────────────────────────────── */
-const verifyToken = (req, res, next) => {
+// gymId in the token = the ACTIVE data-scope (own id, an additional Gym's
+// id, or — for staff — their admin's id). userId = the real logged-in
+// account and NEVER changes when an owner switches between their gyms.
+function signToken(user, activeGymId) {
+  return jwt.sign(
+    {
+      userId: user.id,
+      gymId: activeGymId != null ? activeGymId : (user.gymId || user.id),
+      role: user.role
+    },
+    JWT_SECRET,
+    { expiresIn: TOKEN_EXPIRY }
+  );
+}
+
+function verifyToken(req, res, next) {
   const token = req.header('Authorization')?.replace('Bearer ', '');
-  if (!token) return res.status(401).json({ error: 'No token provided.' });
-  try { req.user = jwt.verify(token, JWT_SECRET); next(); }
-  catch { res.status(401).json({ error: 'Invalid token.' }); }
-};
+  if (!token) return res.status(401).json({ error: 'Access denied. No token provided.' });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (e) {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
 
-const adminOnly = (req, res, next) => {
-  if (!['admin', 'superadmin'].includes(req.user.role))
+function adminOnly(req, res, next) {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin')
     return res.status(403).json({ error: 'Admin access only.' });
   next();
-};
+}
 
-const superAdminOnly = (req, res, next) => {
+function superAdminOnly(req, res, next) {
   if (req.user.role !== 'superadmin')
-    return res.status(403).json({ error: 'Super-admin only.' });
+    return res.status(403).json({ error: 'Super-admin access only.' });
   next();
-};
-
-function makeToken(user) {
-  return jwt.sign(
-    { userId: user.id, email: user.email, role: user.role,
-      gymId: user.gymId || user.id, permissions: user.staffPermissions || {} },
-    JWT_SECRET, { expiresIn: JWT_EXPIRES }
-  );
 }
 
-// Same as makeToken but with gymId/gymName overridden — used when a gym
-// owner switches which of their gyms is "active" without logging out.
-function makeTokenForGym(user, gymId, gymName) {
-  return jwt.sign(
-    { userId: user.id, email: user.email, role: user.role,
-      gymId, gymName, permissions: user.staffPermissions || {} },
-    JWT_SECRET, { expiresIn: JWT_EXPIRES }
-  );
-}
+const SAFE_EXCLUDE = ['password', 'pendingPasswordHash'];
 
-/* ─── POST /register  (gym admin registers — awaits superadmin approval) ─ */
-router.post('/register', [
-  body('name').notEmpty(),
-  body('email').isEmail(),
-  body('password').isLength({ min: 6 })
-], async (req, res) => {
+// ══════════════════════════════════════════════════════════════
+// LOGIN
+// ══════════════════════════════════════════════════════════════
+router.post('/login', async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-
-    const { name, email, password, gymName } = req.body;
-
-    if (email.toLowerCase() === 'hprabha585@gmail.com')
-      return res.status(400).json({ error: 'This email cannot be used for registration.' });
-
-    const existing = await User.findOne({ where: { email } });
-    if (existing) return res.status(400).json({
-      error: existing.isApproved ? 'Email already registered.' : 'Registration already submitted. Awaiting approval.'
-    });
-
-    const user = await User.create({
-      name, email, password, gymName: gymName || '',
-      role: 'admin', isApproved: false, pendingApproval: true, isActive: true
-    });
-
-    res.status(201).json({ message: 'Registration submitted. Awaiting GymPro approval.', pendingApproval: true });
-  } catch (err) {
-    console.error('Register error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ─── POST /register-staff  (staff registers by entering admin email) ─── */
-router.post('/register-staff', [
-  body('name').notEmpty().withMessage('Name required'),
-  body('email').isEmail().withMessage('Valid email required'),
-  body('password').isLength({ min: 6 }).withMessage('Password min 6 chars'),
-  body('adminEmail').isEmail().withMessage('Valid admin email required')
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
-
-    const { name, email, password, adminEmail } = req.body;
-
-    const admin = await User.findOne({
-      where: { email: adminEmail.toLowerCase(), role: 'admin', isApproved: true, isActive: true }
-    });
-    if (!admin) return res.status(404).json({ error: 'No approved gym found with that email. Check the admin email and try again.' });
-
-    const existing = await User.findOne({ where: { email } });
-    if (existing) return res.status(400).json({ error: 'This email is already registered.' });
-
-    await User.create({
-      name, email, password,
-      role: 'staff',
-      gymId: admin.gymId || admin.id,
-      isApproved: false,
-      pendingApproval: true,
-      isActive: false,
-      staffPermissions: {
-        viewMembers: true, addMembers: true, editMembers: true, deleteMembers: false,
-        viewAttendance: true, markAttendance: true, viewTrainers: true,
-        viewPayments: true, viewRevenue: false, viewSettings: false
-      }
-    });
-
-    res.status(201).json({
-      message: `Request sent to ${admin.gymName || admin.name}. Please wait for admin approval.`,
-      pendingApproval: true
-    });
-  } catch (err) {
-    console.error('Staff register error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ─── POST /register-superadmin — PUBLIC request for a super-admin account.
-   Reachable straight from the login page (no existing superadmin needed —
-   solves the bootstrap problem on a fresh database). The account is
-   created PENDING regardless of who submits it; the site owner must
-   approve it directly in the database. This is intentionally public but
-   safe: nothing it creates can ever log in without that manual DB step. */
-router.post('/register-superadmin', [
-  body('name').notEmpty(),
-  body('email').isEmail(),
-  body('password').isLength({ min: 6 })
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
-
-    const { name, email, password } = req.body;
-    const emailLower = email.toLowerCase().trim();
-
-    const existing = await User.findOne({ where: { email: emailLower } });
-    if (existing) return res.status(400).json({
-      error: existing.isApproved ? 'Email already registered.' : 'A request for this email is already pending approval.'
-    });
-
-    await User.create({
-      name, email: emailLower, password,
-      role: 'superadmin', isApproved: false, pendingApproval: true, isActive: true
-    });
-
-    res.status(201).json({
-      message: 'Request submitted. This account cannot log in until it is approved directly in the database by the site owner.'
-    });
-  } catch (err) {
-    console.error('Superadmin registration error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ─── POST /login ─────────────────────────────────────────────── */
-router.post('/login', [
-  body('email').isEmail(),
-  body('password').notEmpty()
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ error: errors.array()[0].msg });
-
     const { email, password } = req.body;
-    const user = await User.findOne({ where: { email } });
-    if (!user) return res.status(401).json({ error: 'Invalid email or password.' });
+    if (!email || !password) return res.status(400).json({ error: 'Email and password are required.' });
 
-    if (!user.isApproved) {
-      if (user.pendingApproval) return res.status(401).json({ error: 'Account pending approval. Please wait.' });
-      return res.status(401).json({ error: `Account rejected: ${user.rejectionReason || 'Contact admin.'}` });
-    }
-    if (!user.isActive) return res.status(401).json({ error: 'Account deactivated. Contact your admin.' });
+    const user = await User.findOne({ where: { email: email.toLowerCase().trim() } });
+    if (!user) return res.status(400).json({ error: 'Invalid email or password.' });
 
     const ok = await user.comparePassword(password);
-    if (!ok) return res.status(401).json({ error: 'Invalid email or password.' });
+    if (!ok) return res.status(400).json({ error: 'Invalid email or password.' });
+
+    if (!user.isActive) return res.status(403).json({ error: 'This account has been deactivated. Contact your gym admin.' });
+    if (user.pendingApproval || !user.isApproved) return res.status(403).json({ error: 'Your account is still pending approval.' });
 
     user.lastLogin = new Date();
-    await user.save();
+    await user.save({ hooks: false });
 
-    res.json({
-      message: 'Login successful',
-      token: makeToken(user),
-      user: {
-        id: user.id, name: user.name, email: user.email,
-        role: user.role, gymId: user.gymId || user.id,
-        gymName: user.gymName || '', permissions: user.staffPermissions || {}
-      }
-    });
-  } catch (err) {
-    console.error('Login error:', err);
-    res.status(500).json({ error: err.message });
-  }
+    const token = signToken(user);
+    const publicUser = user.toJSON();
+    SAFE_EXCLUDE.forEach(k => delete publicUser[k]);
+    res.json({ token, user: publicUser });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ─── GET /me ─────────────────────────────────────────────────── */
-router.get('/me', verifyToken, async (req, res) => {
+// ══════════════════════════════════════════════════════════════
+// REGISTER — Gym Admin (owner) — pending superadmin approval
+// ══════════════════════════════════════════════════════════════
+router.post('/register', async (req, res) => {
   try {
-    const user = await User.findByPk(req.user.userId, { attributes: { exclude: ['password'] } });
+    const { name, gymName, email, password } = req.body;
+    if (!name || !gymName || !email || !password) return res.status(400).json({ error: 'All fields are required.' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+
+    const emailLower = email.toLowerCase().trim();
+    if (await User.findOne({ where: { email: emailLower } })) return res.status(400).json({ error: 'Email already registered.' });
+
+    await User.create({ name, gymName, email: emailLower, password, role: 'admin', isApproved: false, pendingApproval: true, isActive: true });
+    res.status(201).json({ pendingApproval: true, message: 'Registration submitted for approval.' });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════
+// REGISTER — Super Admin request (manual DB approval — see SUPERADMIN_SETUP.md)
+// ══════════════════════════════════════════════════════════════
+router.post('/register-superadmin', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ error: 'All fields are required.' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+
+    const emailLower = email.toLowerCase().trim();
+    if (await User.findOne({ where: { email: emailLower } })) return res.status(400).json({ error: 'Email already registered.' });
+
+    await User.create({ name, email: emailLower, password, role: 'superadmin', isApproved: false, pendingApproval: true, isActive: true });
+    res.status(201).json({ message: 'Request submitted — requires manual database approval.' });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════
+// REGISTER — Staff — pending THEIR gym admin's approval
+// ══════════════════════════════════════════════════════════════
+router.post('/register-staff', async (req, res) => {
+  try {
+    const { name, adminEmail, email, password } = req.body;
+    if (!name || !adminEmail || !email || !password) return res.status(400).json({ error: 'All fields are required.' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+
+    const admin = await User.findOne({ where: { email: adminEmail.toLowerCase().trim(), role: 'admin' } });
+    if (!admin) return res.status(404).json({ error: 'No gym admin found with that email.' });
+
+    const emailLower = email.toLowerCase().trim();
+    if (await User.findOne({ where: { email: emailLower } })) return res.status(400).json({ error: 'Email already registered.' });
+
+    await User.create({ name, email: emailLower, password, role: 'staff', gymId: admin.id, isApproved: false, pendingApproval: true, isActive: true });
+    res.status(201).json({ message: 'Request sent to your gym admin for approval.' });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════
+// SUPERADMIN — approve / reject gym-admin registrations
+// ══════════════════════════════════════════════════════════════
+router.get('/pending-approvals', verifyToken, superAdminOnly, async (req, res) => {
+  try {
+    const list = await User.findAll({
+      where: { role: 'admin', pendingApproval: true, isApproved: false },
+      attributes: { exclude: SAFE_EXCLUDE },
+      order: [['createdAt', 'DESC']]
+    });
+    res.json(list);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/approve/:userId', verifyToken, superAdminOnly, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.userId);
+    if (!user || user.role !== 'admin') return res.status(404).json({ error: 'Registration not found.' });
+
+    const approver = await User.findByPk(req.user.userId);
+    user.isApproved = true;
+    user.pendingApproval = false;
+    user.rejectionReason = '';
+    user.approvedBy = req.user.userId;
+    user.approvedByName = approver?.name || '';
+    user.approvedAt = new Date();
+    if (req.body.memberLimit !== undefined) {
+      const lim = req.body.memberLimit;
+      user.memberLimit = (lim === null || lim === '' || Number(lim) <= 0) ? null : Math.floor(Number(lim));
+    }
+    await user.save({ hooks: false });
+    res.json({ message: `${user.gymName || user.name} approved.` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/reject/:userId', verifyToken, superAdminOnly, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.userId);
+    if (!user || user.role !== 'admin') return res.status(404).json({ error: 'Registration not found.' });
+    user.isApproved = false;
+    user.pendingApproval = false;
+    user.rejectionReason = req.body.reason || 'Not approved.';
+    await user.save({ hooks: false });
+    res.json({ message: 'Registration rejected.' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════
+// GYM ADMIN — approve / reject their own staff registrations
+// ══════════════════════════════════════════════════════════════
+router.get('/pending-staff', verifyToken, adminOnly, async (req, res) => {
+  try {
+    const gymId = req.user.userId;
+    const list = await User.findAll({
+      where: { role: 'staff', gymId, pendingApproval: true, isApproved: false },
+      attributes: { exclude: SAFE_EXCLUDE },
+      order: [['createdAt', 'DESC']]
+    });
+    res.json(list);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/approve-staff/:staffId', verifyToken, adminOnly, async (req, res) => {
+  try {
+    const staff = await User.findByPk(req.params.staffId);
+    if (!staff || staff.role !== 'staff' || Number(staff.gymId) !== Number(req.user.userId))
+      return res.status(404).json({ error: 'Staff request not found.' });
+
+    const approver = await User.findByPk(req.user.userId);
+    staff.isApproved = true;
+    staff.pendingApproval = false;
+    staff.rejectionReason = '';
+    staff.approvedBy = req.user.userId;
+    staff.approvedByName = approver?.name || '';
+    staff.approvedAt = new Date();
+    await staff.save({ hooks: false });
+    res.json({ message: `${staff.name} approved.` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/reject-staff/:staffId', verifyToken, adminOnly, async (req, res) => {
+  try {
+    const staff = await User.findByPk(req.params.staffId);
+    if (!staff || staff.role !== 'staff' || Number(staff.gymId) !== Number(req.user.userId))
+      return res.status(404).json({ error: 'Staff request not found.' });
+    staff.isApproved = false;
+    staff.pendingApproval = false;
+    staff.rejectionReason = req.body.reason || 'Not approved.';
+    await staff.save({ hooks: false });
+    res.json({ message: `${staff.name} rejected.` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════
+// PROFILE  (gymData JSON blob: plans / discounts / UPI & fee config)
+// ══════════════════════════════════════════════════════════════
+router.get('/profile', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.userId, { attributes: { exclude: SAFE_EXCLUDE } });
     if (!user) return res.status(404).json({ error: 'User not found.' });
     res.json(user);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ─── GET /pending-approvals  (superadmin: pending gym owners) ── */
-router.get('/pending-approvals', verifyToken, superAdminOnly, async (req, res) => {
-  try {
-    const list = await User.findAll({
-      where: { role: 'admin', isApproved: false, pendingApproval: true },
-      attributes: { exclude: ['password'] },
-      order: [['createdAt', 'DESC']]
-    });
-    res.json(list);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-/* ─── GET /pending-staff  (admin: pending staff requests for their gym) ─ */
-router.get('/pending-staff', verifyToken, adminOnly, async (req, res) => {
-  try {
-    const gymId = req.user.gymId || req.user.userId;
-    const list = await User.findAll({
-      where: { role: 'staff', gymId, isApproved: false, pendingApproval: true },
-      attributes: { exclude: ['password'] },
-      order: [['createdAt', 'DESC']]
-    });
-    res.json(list);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-/* ─── POST /approve/:userId  (superadmin approves gym admin) ──── */
-router.post('/approve/:userId', verifyToken, superAdminOnly, async (req, res) => {
-  try {
-    const user = await User.findByPk(req.params.userId);
-    if (!user) return res.status(404).json({ error: 'User not found.' });
-
-    user.isApproved = true;
-    user.pendingApproval = false;
-    user.isActive = true;
-    user.approvedBy = req.user.userId;
-    user.approvedAt = new Date();
-    user.rejectionReason = '';
-    if (!user.gymId) user.gymId = user.id;
-
-    // Optional member limit, set at approval time (or left unlimited)
-    if (req.body.memberLimit !== undefined) {
-      const lim = req.body.memberLimit;
-      user.memberLimit = (lim === null || lim === '' || Number(lim) <= 0) ? null : Math.floor(Number(lim));
-    }
-
-    await user.save();
-
-    res.json({ message: `${user.gymName || user.name} approved.` });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-/* ─── POST /approve-staff/:userId  (admin approves staff request) */
-router.post('/approve-staff/:userId', verifyToken, adminOnly, async (req, res) => {
-  try {
-    const staff = await User.findByPk(req.params.userId);
-    if (!staff || staff.role !== 'staff') return res.status(404).json({ error: 'Staff not found.' });
-
-    const gymId = Number(req.user.gymId || req.user.userId);
-    if (Number(staff.gymId) !== gymId) return res.status(403).json({ error: 'Not your staff request.' });
-
-    staff.isApproved = true;
-    staff.pendingApproval = false;
-    staff.isActive = true;
-    staff.approvedBy = req.user.userId;
-    staff.approvedAt = new Date();
-    staff.rejectionReason = '';
-    await staff.save();
-
-    res.json({ message: `${staff.name} approved as staff.` });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-/* ─── POST /reject/:userId  (superadmin rejects gym admin) ────── */
-router.post('/reject/:userId', verifyToken, superAdminOnly, async (req, res) => {
-  try {
-    const user = await User.findByPk(req.params.userId);
-    if (!user) return res.status(404).json({ error: 'User not found.' });
-    user.isApproved = false; user.pendingApproval = false;
-    user.isActive = false; user.rejectionReason = req.body.reason || 'Not approved.';
-    await user.save();
-    res.json({ message: `${user.name} rejected.` });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-/* ─── POST /reject-staff/:userId  (admin rejects staff request) ─ */
-router.post('/reject-staff/:userId', verifyToken, adminOnly, async (req, res) => {
-  try {
-    const staff = await User.findByPk(req.params.userId);
-    if (!staff) return res.status(404).json({ error: 'Staff not found.' });
-    staff.isApproved = false; staff.pendingApproval = false;
-    staff.isActive = false; staff.rejectionReason = req.body.reason || 'Not approved.';
-    await staff.save();
-    res.json({ message: `${staff.name} rejected.` });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-/* ─── POST /logout ───────────────────────────────────────────── */
-router.post('/logout', verifyToken, (req, res) => res.json({ message: 'Logged out.' }));
-
-/* ─── GET /gym-profile ───────────────────────────────────────── */
-router.get('/gym-profile', verifyToken, async (req, res) => {
-  try {
-    const ownerId = req.user.gymId || req.user.userId;
-    const owner = await User.findByPk(ownerId, { attributes: ['gymData', 'gymName', 'name'] });
-    if (!owner) return res.status(404).json({ error: 'Gym profile not found.' });
-    res.json({ gymData: owner.gymData || '{}', gymName: owner.gymName || owner.name || '' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-/* ─── PATCH /profile ─────────────────────────────────────────── */
 router.patch('/profile', verifyToken, async (req, res) => {
   try {
-    const ownerId = req.user.gymId || req.user.userId;
-    const owner = await User.findByPk(ownerId);
-    if (!owner) return res.status(404).json({ error: 'Gym profile not found.' });
-    if (req.body.gymData !== undefined) owner.gymData = req.body.gymData;
-    if (req.body.gymName !== undefined) owner.gymName = req.body.gymName;
-    await owner.save();
-    res.json({ message: 'Profile updated.' });
+    const user = await User.findByPk(req.user.userId);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    if (req.body.gymData !== undefined) user.gymData = req.body.gymData;
+    await user.save({ hooks: false });
+    const out = user.toJSON();
+    SAFE_EXCLUDE.forEach(k => delete out[k]);
+    res.json(out);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ══════════════════════════════════════════════════════════════
-   MULTI-GYM SUPPORT
-   An owner's original account IS their first gym (gymId = own User.id,
-   unchanged from before). Additional gyms are separate `Gym` rows that
-   need superadmin approval before they can be switched to.
-══════════════════════════════════════════════════════════════ */
+// Staff (and an owner currently switched into an additional gym) always
+// read the GYM OWNER's own settings — never their own row's gymData.
+router.get('/gym-profile', verifyToken, async (req, res) => {
+  try {
+    const ownerId = req.user.role === 'staff' ? req.user.gymId : req.user.userId;
+    const owner = await User.findByPk(ownerId, { attributes: ['gymData'] });
+    if (!owner) return res.status(404).json({ error: 'Gym owner not found.' });
+    res.json({ gymData: owner.gymData });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
-/* ─── GET /my-gyms — list every gym this owner has (primary + extras) ─── */
+// ══════════════════════════════════════════════════════════════
+// MULTI-GYM  —  list / add / switch
+// ══════════════════════════════════════════════════════════════
+
+// GET /auth/my-gyms — every gym this OWNER account has: their primary gym
+// (their own User row) plus any additional gyms (rows in the Gym table).
 router.get('/my-gyms', verifyToken, adminOnly, async (req, res) => {
   try {
-    if (req.user.role === 'superadmin')
-      return res.status(400).json({ error: 'Superadmin does not own gyms.' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Only gym owners have multiple gyms.' });
 
-    const ownerId = req.user.userId;
+    const ownerId = req.user.userId; // real account id — constant even while switched
     const owner = await User.findByPk(ownerId);
     if (!owner) return res.status(404).json({ error: 'Account not found.' });
 
-    const extraGyms = await Gym.findAll({ where: { ownerId }, order: [['createdAt', 'ASC']] });
+    const activeGymId = Number(req.user.gymId || ownerId);
 
-    const list = [
-      {
-        id: owner.id,
-        _id: String(owner.id),
-        name: owner.gymName || owner.name || 'My Gym',
-        isPrimary: true,
-        isApproved: true,
-        pendingApproval: false,
-        current: Number(req.user.gymId) === owner.id
-      },
-      ...extraGyms.map(g => ({
+    const list = [{
+      id: owner.id,
+      name: owner.gymName || (owner.name + "'s Gym"),
+      isPrimary: true,
+      isApproved: true,
+      pendingApproval: false,
+      rejectionReason: '',
+      current: activeGymId === owner.id
+    }];
+
+    const extras = await Gym.findAll({ where: { ownerId }, order: [['createdAt', 'ASC']] });
+    extras.forEach(g => {
+      list.push({
         id: g.id,
-        _id: String(g.id),
         name: g.name,
         isPrimary: false,
         isApproved: g.isApproved,
         pendingApproval: g.pendingApproval,
         rejectionReason: g.rejectionReason,
-        current: Number(req.user.gymId) === g.id
-      }))
-    ];
+        current: activeGymId === g.id
+      });
+    });
 
     res.json(list);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ─── POST /add-gym — request a new gym; needs superadmin approval ──── */
+// POST /auth/add-gym — { name } — request an additional gym (needs superadmin approval)
 router.post('/add-gym', verifyToken, adminOnly, async (req, res) => {
   try {
-    if (req.user.role === 'superadmin')
-      return res.status(400).json({ error: 'Superadmin does not own gyms.' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Only gym owners can add gyms.' });
 
-    const { name } = req.body;
-    if (!name || !name.trim()) return res.status(400).json({ error: 'Gym name is required.' });
+    const name = (req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Gym name is required.' });
 
-    const gym = await Gym.create({
-      ownerId: req.user.userId,
-      name: name.trim(),
-      isApproved: false,
-      pendingApproval: true
-    });
-
-    res.status(201).json({
-      message: `"${gym.name}" submitted — waiting for GymPro approval before you can switch to it.`,
-      gym
-    });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    await Gym.create({ ownerId: req.user.userId, name, isApproved: false, pendingApproval: true });
+    res.status(201).json({ message: `"${name}" submitted for GymPro approval.` });
+  } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
-/* ─── POST /switch-gym — change which gym is "active", no re-login ──── */
+// POST /auth/switch-gym — { gymId } — change active data-scope, issue new token
 router.post('/switch-gym', verifyToken, adminOnly, async (req, res) => {
   try {
-    if (req.user.role === 'superadmin')
-      return res.status(400).json({ error: 'Superadmin does not switch gyms.' });
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Only gym owners can switch gyms.' });
 
-    const { gymId } = req.body;
-    if (!gymId) return res.status(400).json({ error: 'gymId is required.' });
+    const ownerId = req.user.userId;
+    const targetId = Number(req.body.gymId);
+    if (!targetId) return res.status(400).json({ error: 'gymId is required.' });
 
-    const owner = await User.findByPk(req.user.userId);
+    const owner = await User.findByPk(ownerId);
     if (!owner) return res.status(404).json({ error: 'Account not found.' });
 
-    // Case 1: switching to their own original/primary gym
-    if (Number(gymId) === owner.id) {
-      const token = makeTokenForGym(owner, owner.id, owner.gymName || owner.name);
-      return res.json({ message: `Switched to ${owner.gymName || owner.name}.`, token, gymName: owner.gymName || owner.name });
+    let gymName;
+    if (targetId === owner.id) {
+      gymName = owner.gymName || (owner.name + "'s Gym");
+    } else {
+      const gym = await Gym.findOne({ where: { id: targetId, ownerId } });
+      if (!gym) return res.status(404).json({ error: 'Gym not found.' });
+      if (!gym.isApproved) return res.status(403).json({ error: 'This gym is not yet approved by GymPro.' });
+      gymName = gym.name;
     }
 
-    // Case 2: switching to an approved additional gym they own
-    const gym = await Gym.findOne({ where: { id: gymId, ownerId: owner.id } });
-    if (!gym) return res.status(404).json({ error: 'Gym not found or not yours.' });
-    if (!gym.isApproved) return res.status(403).json({ error: `"${gym.name}" is still pending superadmin approval.` });
-
-    const token = makeTokenForGym(owner, gym.id, gym.name);
-    res.json({ message: `Switched to ${gym.name}.`, token, gymName: gym.name });
+    const token = signToken(owner, targetId);
+    res.json({ token, gymName, message: `Switched to ${gymName}.` });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ─── POST /create-superadmin — an existing superadmin submits a request
-   for a NEW superadmin account. It is created PENDING, not active — the
-   site owner approves it directly in the database (not through the app),
-   for an extra layer of control over who gets top-level access. ────── */
-router.post('/create-superadmin', verifyToken, superAdminOnly, async (req, res) => {
+// ══════════════════════════════════════════════════════════════
+// PASSWORD RESET — requires approval
+//   admin's reset  → approved by superadmin
+//   staff's reset  → approved by their gym admin
+//   (superadmin's own password stays a manual DB operation — see
+//    SUPERADMIN_SETUP.md — consistent with the existing security model)
+// ══════════════════════════════════════════════════════════════
+router.post('/request-password-reset', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-    if (!name || !email || !password || password.length < 6)
-      return res.status(400).json({ error: 'Name, email, and a password (6+ chars) are required.' });
+    const { email, newPassword } = req.body;
+    if (!email || !newPassword) return res.status(400).json({ error: 'Email and new password are required.' });
+    if (newPassword.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
 
-    const emailLower = email.toLowerCase().trim();
-    const existing = await User.findOne({ where: { email: emailLower } });
-    if (existing) return res.status(400).json({ error: 'That email is already registered.' });
+    const user = await User.findOne({ where: { email: email.toLowerCase().trim() } });
+    if (!user) return res.status(404).json({ error: 'No account found with that email.' });
 
-    const newSuperadmin = await User.create({
-      name, email: emailLower, password,
-      role: 'superadmin', isApproved: false, pendingApproval: true, isActive: true
+    if (user.role === 'superadmin')
+      return res.status(400).json({ error: 'Super-admin passwords can only be reset directly in the database — see SUPERADMIN_SETUP.md.' });
+
+    user.pendingPasswordHash = await bcrypt.hash(newPassword, 10);
+    user.pendingPasswordRequestedAt = new Date();
+    await user.save({ hooks: false }); // don't touch/re-hash the real (still active) password field
+
+    const approver = user.role === 'admin' ? 'the GymPro team' : 'your gym admin';
+    res.json({ message: `Password reset requested. Your current password still works until this is approved by ${approver}.` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Superadmin: view + approve/reject pending ADMIN password resets
+router.get('/pending-password-resets', verifyToken, superAdminOnly, async (req, res) => {
+  try {
+    const list = await User.findAll({
+      where: { role: 'admin', pendingPasswordHash: { [Op.ne]: null } },
+      attributes: { exclude: SAFE_EXCLUDE },
+      order: [['pendingPasswordRequestedAt', 'DESC']]
     });
+    res.json(list);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
-    res.status(201).json({
-      message: `Request submitted for ${name}. This account cannot log in yet — ` +
-        `it must be approved directly in the database (set isApproved=1, pendingApproval=0 ` +
-        `on the users table for this email) before it becomes active.`,
-      user: { id: newSuperadmin.id, name: newSuperadmin.name, email: newSuperadmin.email }
-    });
+router.post('/approve-password-reset/:userId', verifyToken, superAdminOnly, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.userId);
+    if (!user || user.role !== 'admin' || !user.pendingPasswordHash)
+      return res.status(404).json({ error: 'No pending password reset for this account.' });
+
+    user.password = user.pendingPasswordHash; // already bcrypt-hashed
+    user.pendingPasswordHash = null;
+    user.pendingPasswordRequestedAt = null;
+    await user.save({ hooks: false }); // hooks:false — must NOT re-hash an already-hashed value
+    res.json({ message: `Password reset approved for ${user.gymName || user.name}.` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/reject-password-reset/:userId', verifyToken, superAdminOnly, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.userId);
+    if (!user || user.role !== 'admin') return res.status(404).json({ error: 'Account not found.' });
+    user.pendingPasswordHash = null;
+    user.pendingPasswordRequestedAt = null;
+    await user.save({ hooks: false });
+    res.json({ message: 'Password reset request rejected.' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
