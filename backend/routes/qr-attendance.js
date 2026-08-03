@@ -1,20 +1,31 @@
 const express = require('express');
 const router = express.Router();
-const { Member, Attendance, User } = require('../models');
+const { Member, Attendance, User, Gym } = require('../models');
 const { Op } = require('sequelize');
 const authMiddleware = require('../middleware/auth');
 
 // Generate GYM QR code (for the gym entrance)
 router.get('/gym-qr', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.gymId || req.user.userId;
+    const userId = req.user.userId;
+    const gymId = req.user.gymId || userId;
 
-    const user = await User.findByPk(userId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    let gymName = 'GymPro';
+
+    // FIX: Dynamically generate QR based on whether it is a primary or secondary gym
+    if (Number(gymId) === Number(userId)) {
+      const user = await User.findByPk(userId);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      gymName = user.name || user.gymName || 'GymPro';
+    } else {
+      const gym = await Gym.findByPk(gymId);
+      if (!gym) return res.status(404).json({ error: 'Gym not found' });
+      gymName = gym.name;
+    }
 
     const qrData = {
-      gymId: userId,
-      gymName: user.name || 'GymPro',
+      gymId: gymId,
+      gymName: gymName,
       type: 'gym_checkin',
       timestamp: Date.now()
     };
@@ -27,8 +38,8 @@ router.get('/gym-qr', authMiddleware, async (req, res) => {
     res.json({
       qrString: checkinUrl,
       qrData: encodedData,
-      gymName: user.name,
-      gymId: userId,
+      gymName: gymName,
+      gymId: gymId,
       checkinUrl
     });
   } catch (err) {
@@ -57,9 +68,6 @@ router.post('/member-checkin', async (req, res) => {
 
     let member;
     if (memberId) {
-      // The number shown to members on their card is memberNo (e.g. "ID #1002"),
-      // not the internal database id — match on memberNo first, fall back to id
-      // so both the friendly displayed number and a raw id still work.
       member = await Member.findOne({ where: { memberNo: memberId, userId: gymId } });
       if (!member) {
         member = await Member.findOne({ where: { id: memberId, userId: gymId } });
