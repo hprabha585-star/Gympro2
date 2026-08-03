@@ -155,16 +155,6 @@
   <span class="topbar-title" id="pageTitle">Dashboard</span>
   <span class="topbar-date" id="topDate"></span>
 </div>
-<!-- ═══════════════════════════════ MAIN ═══════════════════════════════ -->
-<main class="main">
-
-  <!-- NEW: Gym Banner moved here so it isn't hidden behind the topbar -->
-  <div id="activeGymBanner" style="display:none;background:#1A2E2E;color:#fff;padding:10px 16px;border-radius:14px;margin-bottom:12px;font-size:.8rem;font-weight:800;text-align:center;letter-spacing:.3px;box-shadow:0 4px 12px rgba(0,0,0,0.1)">
-    🏢 <span id="activeGymName">—</span>
-  </div>
-
-  <!-- ──────────────── DASHBOARD ──────────────── -->
-  <div id="page-dashboard" class="page active">
 
 <div id="offline-banner">⚠️ You are offline — viewing saved data.</div>
 
@@ -192,6 +182,12 @@
 
   <!-- ──────────────── DASHBOARD ──────────────── -->
   <div id="page-dashboard" class="page active">
+    
+    <!-- Active Gym Banner (Visible ONLY on Dashboard) -->
+    <div id="activeGymBanner" style="display:none;background:#1A2E2E;color:#fff;padding:12px 16px;border-radius:14px;margin-bottom:12px;font-size:.85rem;font-weight:800;text-align:center;letter-spacing:.3px;box-shadow:0 4px 12px rgba(0,0,0,0.1)">
+      🏢 <span id="activeGymName">—</span>
+    </div>
+
     <!-- Staff pending banner (admin only) -->
     <div id="staffPendingBanner" style="display:none;background:#FEF9E7;border:1px solid #FDE68A;border-radius:14px;padding:12px 14px;margin-bottom:10px;align-items:center;justify-content:space-between;gap:10px">
       <div style="display:flex;align-items:center;gap:8px">
@@ -483,7 +479,6 @@
     </div>
   </div>
 
-  <!-- ──────────────── REVENUE ──────────────── -->
   <!-- ──────────────── PT BLOCK ──────────────── -->
   <div id="page-ptblock" class="page">
     <div style="background:linear-gradient(135deg,#1A8C8C,#156F6F);border-radius:18px;padding:16px;margin-bottom:12px;
@@ -498,6 +493,7 @@
     </div>
   </div>
 
+  <!-- ──────────────── REVENUE ──────────────── -->
   <div id="page-revenue" class="page">
     <div style="display:flex;align-items:center;gap:8px;background:#fff;border-radius:14px;padding:10px 14px;margin-bottom:10px;border:1px solid #E0ECEC;box-shadow:0 2px 8px rgba(0,0,0,.04)">
       <span style="font-size:1.1rem">🔍</span>
@@ -526,7 +522,6 @@
         <div id="revenueDetailed"></div>
       </div>
     </div>
-
   </div>
 
   <!-- ──────────────── SETTINGS ──────────────── -->
@@ -565,142 +560,25 @@
     </div>
   </div>
 
-
   <!-- ======== SUPERADMIN PAGE ======== -->
+  <!-- Note: This markup remains here purely as a fallback placeholder. 
+       The actual superadmin page logic is run securely within superadmin.html -->
   <div id="page-superadmin" class="page">
     <div style="background:linear-gradient(135deg,#1A2E2E,#2D4E4E);border-radius:18px;padding:16px;margin-bottom:14px">
       <div style="font-size:1.1rem;font-weight:800;color:#fff">🏆 GymPro Control Panel</div>
       <div style="font-size:.72rem;color:rgba(255,255,255,.5);margin-top:2px" id="saEmailLabel"></div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
-      <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;border:1px solid #E0ECEC">
-        <div style="font-size:1.5rem;font-weight:800;color:#E74C3C;line-height:1" id="saPending">-</div>
-        <div style="font-size:.56rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Pending</div>
-      </div>
-      <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;border:1px solid #E0ECEC">
-        <div style="font-size:1.5rem;font-weight:800;color:#D97706;line-height:1" id="saPendingGymsCount">-</div>
-        <div style="font-size:.56rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Gym Requests</div>
-      </div>
-      <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;border:1px solid #E0ECEC">
-        <div style="font-size:1.5rem;font-weight:800;color:#27AE60;line-height:1" id="saActiveCount">-</div>
-        <div style="font-size:.56rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Active Gyms</div>
-      </div>
-      <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;border:1px solid #E0ECEC">
-        <div style="font-size:1.5rem;font-weight:800;color:#1A8C8C;line-height:1" id="saTotal">-</div>
-        <div style="font-size:.56rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Total Gyms</div>
-      </div>
-    </div>
-    <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
-      <div style="padding:12px 16px;background:#FEF9E7;border-bottom:1.5px solid #FDE68A;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
-        <span>⏳ Pending Admin Approvals <span id="saPendingBadge" style="background:#E74C3C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
-        <button onclick="loadSuperAdminData()" style="background:#F0F5F5;border:1px solid #E0ECEC;border-radius:8px;padding:5px 11px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit">🔄</button>
-      </div>
-      <div id="saPendingList"><div class="empty"><div class="ei">✅</div><p>Loading...</p></div></div>
-    </div>
-    <!-- Manage Gym: additional-gym requests from existing admins, awaiting superadmin approval -->
-    <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
-      <div style="padding:12px 16px;background:#FEF3E2;border-bottom:1.5px solid #FCD9A8;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
-        <span>🏢 Manage Gym — Pending Gym Approvals <span id="saPendingGymsBadge" style="background:#D97706;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
-      </div>
-      <div id="saPendingGymsList"><div class="empty"><div class="ei">✅</div><p>Loading...</p></div></div>
-    </div>
-    <div style="background:#fff;border-radius:18px;overflow:hidden;border:1px solid #E0ECEC">
-      <div style="padding:12px 16px;background:#F8FFFE;border-bottom:1.5px solid #E0ECEC;font-weight:800;font-size:.9rem">
-        🏋️ All Gyms <span id="saGymsBadge" style="background:#1A8C8C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span>
-      </div>
-      <div id="saGymsList"><div class="empty"><p>Loading...</p></div></div>
-    </div>
-    <div id="saRejectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;align-items:center;justify-content:center;padding:16px">
-      <div style="background:#fff;border-radius:18px;padding:20px;width:100%;max-width:380px">
-        <div style="font-size:1rem;font-weight:800;margin-bottom:10px;color:#1A2E2E" id="saRejectModalTitle">❌ Reject Registration</div>
-        <textarea id="saRejectReason" placeholder="Reason..." style="width:100%;padding:10px;border:2px solid #E0ECEC;border-radius:10px;font-family:inherit;font-size:.88rem;min-height:60px;resize:none"></textarea>
-        <div style="display:flex;gap:8px;margin-top:10px">
-          <button onclick="document.getElementById('saRejectModal').style.display='none'" style="flex:1;padding:10px;border:1px solid #E0ECEC;border-radius:10px;background:#F0F5F5;font-family:inherit;font-weight:700;cursor:pointer">Cancel</button>
-          <button onclick="confirmSaReject()" style="flex:1;padding:10px;border:none;border-radius:10px;background:#E74C3C;color:#fff;font-family:inherit;font-weight:700;cursor:pointer">Reject</button>
-        </div>
-      </div>
-    </div>
   </div>
 
-
   <!-- ======== GYM ADMIN PAGE ======== -->
+  <!-- Note: This markup remains here purely as a fallback placeholder. 
+       The actual gymadmin page logic is run securely within admin.html -->
   <div id="page-gymadmin" class="page">
     <div style="background:linear-gradient(135deg,#1A8C8C,#156F6F);border-radius:18px;padding:16px;margin-bottom:14px">
       <div style="font-size:1.05rem;font-weight:800;color:#fff;margin-bottom:2px">🏋️ Gym Admin Panel</div>
       <div style="font-size:.72rem;color:rgba(255,255,255,.65)" id="gaAdminLabel"></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-      <div style="background:#fff;border-radius:14px;padding:14px;text-align:center;border:1px solid #E0ECEC">
-        <div style="font-size:1.6rem;font-weight:800;color:#E74C3C" id="gaPendingCount">-</div>
-        <div style="font-size:.6rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Pending Staff</div>
-      </div>
-      <div style="background:#fff;border-radius:14px;padding:14px;text-align:center;border:1px solid #E0ECEC">
-        <div style="font-size:1.6rem;font-weight:800;color:#27AE60" id="gaActiveCount">-</div>
-        <div style="font-size:.6rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Active Staff</div>
-      </div>
-    </div>
-
-    <!-- Pending Staff Approvals -->
-    <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
-      <div style="padding:12px 16px;background:#FEF9E7;border-bottom:1.5px solid #FDE68A;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
-        <span>⏳ Staff Requests <span id="gaStaffBadge" style="background:#E74C3C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
-        <button onclick="loadGymAdminData()" style="background:#F0F5F5;border:1px solid #E0ECEC;border-radius:8px;padding:5px 11px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit">🔄</button>
-      </div>
-      <div id="gaPendingList"><div class="empty"><div class="ei">✅</div><p>No pending requests</p></div></div>
-    </div>
-
-    <!-- Pending Staff Password Resets -->
-    <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
-      <div style="padding:12px 16px;background:#FEECEB;border-bottom:1.5px solid #F5C6C0;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
-        <span>🔑 Password Reset Requests <span id="gaResetBadge" style="background:#E74C3C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
-      </div>
-      <div id="gaResetList"><div class="empty"><div class="ei">✅</div><p>No pending requests</p></div></div>
-    </div>
-
-    <!-- Create Staff manually -->
-    <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
-      <div style="padding:12px 16px;background:#F8FFFE;border-bottom:1.5px solid #E0ECEC;font-weight:800;font-size:.9rem">➕ Add Staff Manually</div>
-      <div style="padding:14px 16px">
-        <div style="margin-bottom:10px">
-          <label style="display:block;font-size:.68rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Full Name</label>
-          <input id="gaSName" type="text" placeholder="Staff member name" style="width:100%;padding:11px 13px;border:2px solid #E0ECEC;border-radius:11px;font-family:inherit;font-size:.9rem;background:#F8FFFE">
-        </div>
-        <div style="margin-bottom:10px">
-          <label style="display:block;font-size:.68rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Email</label>
-          <input id="gaSEmail" type="email" placeholder="staff@email.com" style="width:100%;padding:11px 13px;border:2px solid #E0ECEC;border-radius:11px;font-family:inherit;font-size:.9rem;background:#F8FFFE">
-        </div>
-        <div style="margin-bottom:12px">
-          <label style="display:block;font-size:.68rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Password</label>
-          <input id="gaSPass" type="text" placeholder="Min 6 characters" style="width:100%;padding:11px 13px;border:2px solid #E0ECEC;border-radius:11px;font-family:inherit;font-size:.9rem;background:#F8FFFE">
-        </div>
-        <div style="background:#F8FFFE;border:1px solid #E0ECEC;border-radius:12px;padding:12px;margin-bottom:12px">
-          <div style="font-size:.68rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">🔒 Permissions</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#fff;border:1px solid #E0ECEC;border-radius:9px;cursor:pointer;font-size:.78rem;font-weight:600">
-              <input type="checkbox" id="gp_members" checked style="accent-color:#1A8C8C;width:15px;height:15px"> 👥 Members</label>
-            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#fff;border:1px solid #E0ECEC;border-radius:9px;cursor:pointer;font-size:.78rem;font-weight:600">
-              <input type="checkbox" id="gp_attendance" checked style="accent-color:#1A8C8C;width:15px;height:15px"> 📅 Attendance</label>
-            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#fff;border:1px solid #E0ECEC;border-radius:9px;cursor:pointer;font-size:.78rem;font-weight:600">
-              <input type="checkbox" id="gp_payments" checked style="accent-color:#1A8C8C;width:15px;height:15px"> 💳 Payments</label>
-            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#fff;border:1px solid #E0ECEC;border-radius:9px;cursor:pointer;font-size:.78rem;font-weight:600">
-              <input type="checkbox" id="gp_trainers" checked style="accent-color:#1A8C8C;width:15px;height:15px"> 💪 Trainers</label>
-            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#fff;border:1px solid #E0ECEC;border-radius:9px;cursor:pointer;font-size:.78rem;font-weight:600">
-              <input type="checkbox" id="gp_revenue" style="accent-color:#1A8C8C;width:15px;height:15px"> 📈 Revenue</label>
-            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#fff;border:1px solid #FECDD5;border-radius:9px;cursor:pointer;font-size:.78rem;font-weight:600;color:#E74C3C">
-              <input type="checkbox" id="gp_delete" style="accent-color:#E74C3C;width:15px;height:15px"> 🗑️ Delete</label>
-          </div>
-        </div>
-        <button onclick="gaCreateStaff()" style="width:100%;padding:13px;background:#1A8C8C;color:#fff;border:none;border-radius:12px;font-family:inherit;font-size:.92rem;font-weight:800;cursor:pointer">➕ Create Staff Account</button>
-      </div>
-    </div>
-
-    <!-- Active Staff List -->
-    <div style="background:#fff;border-radius:18px;overflow:hidden;border:1px solid #E0ECEC">
-      <div style="padding:12px 16px;background:#F8FFFE;border-bottom:1.5px solid #E0ECEC;font-weight:800;font-size:.9rem">👥 Active Staff <span id="gaStaffCount" style="background:#1A8C8C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></div>
-      <div id="gaStaffList"><div class="empty"><div class="ei">⏳</div><p>Loading...</p></div></div>
-    </div>
   </div>
-
 
 </main>
 
