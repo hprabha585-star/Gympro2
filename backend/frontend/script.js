@@ -84,28 +84,60 @@ async function openManageGymModal() {
 
 function renderGymList(gyms) {
   const container = document.getElementById('gymListContainer');
-  if (!gyms.length) { container.innerHTML = '<div style="text-align:center;padding:20px;color:#8AABAB">No gyms found</div>'; return; }
+  
+  // Exclude rejected gyms (where both isApproved & pendingApproval are false)
+  const visibleGyms = gyms.filter(g => !(g.isApproved === false && g.pendingApproval === false));
 
-  container.innerHTML = gyms.map(g => {
+  if (!visibleGyms.length) { container.innerHTML = '<div style="text-align:center;padding:20px;color:#8AABAB">No gyms found</div>'; return; }
+
+  container.innerHTML = visibleGyms.map(g => {
     let statusBadge = '';
     let actionBtn = '';
+    let deleteBtn = '';
+
     if (g.current) {
       statusBadge = `<span style="background:#E8F8EF;color:#27AE60;padding:2px 9px;border-radius:12px;font-size:.65rem;font-weight:800">✓ Active</span>`;
     } else if (g.isApproved) {
       actionBtn = `<button class="btn btn-sm" style="background:#1A8C8C;color:#fff" onclick="switchGym('${esc(String(g.id))}')">Switch</button>`;
     } else if (g.pendingApproval) {
       statusBadge = `<span style="background:#FEF6E7;color:#F39C12;padding:2px 9px;border-radius:12px;font-size:.65rem;font-weight:800">⏳ Pending Approval</span>`;
-    } else {
-      statusBadge = `<span style="background:#FEECEB;color:#E74C3C;padding:2px 9px;border-radius:12px;font-size:.65rem;font-weight:800" title="${esc(g.rejectionReason||'')}">✗ Rejected</span>`;
     }
+
+    // Add a Delete button ONLY for additional gyms (the primary gym is tied to the root user account)
+    if (!g.isPrimary) {
+      deleteBtn = `<button class="btn btn-sm" style="background:#FFF0F0;color:#E74C3C;margin-left:6px" onclick="deleteMyGym('${esc(String(g.id))}', '${esc(g.name)}')">🗑️</button>`;
+    }
+
     return `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;background:${g.current?'#F0F5F5':'#fff'};border:1.5px solid ${g.current?'#1A8C8C':'#E0ECEC'};border-radius:12px">
         <div style="min-width:0">
           <div style="font-weight:800;font-size:.88rem;color:#1A2E2E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.name)}${g.isPrimary?' <span style="font-size:.6rem;color:#8AABAB;font-weight:600">(Primary)</span>':''}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">${statusBadge}${actionBtn}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">${statusBadge}${actionBtn}${deleteBtn}</div>
       </div>`;
   }).join('');
+}
+
+// Add this function directly underneath renderGymList
+async function deleteMyGym(gymId, name) {
+  if (!confirm(`Permanently delete "${name}"?\nAll members, trainers, and attendance data linked to this gym will be LOST. This cannot be undone.`)) return;
+  try {
+    const res = await fetch(`${BASE}/auth/my-gym/${gymId}`, { method: 'DELETE', headers: hdrs() });
+    const data = await res.json();
+    if (!res.ok) { toast(data.error || 'Failed to delete gym', 'error'); return; }
+
+    toast(data.message || 'Gym deleted successfully', 'success');
+
+    // Return owner to the Primary gym if they happened to delete the gym they were currently viewing
+    const u = JSON.parse(localStorage.getItem('user') || '{}');
+    if (Number(u.gymId) === Number(gymId)) {
+        await switchGym(u.id);
+    } else {
+        openManageGymModal(); // Silently refresh the list
+    }
+  } catch (e) {
+    toast('Network error', 'error');
+  }
 }
 
 async function switchGym(gymId) {
