@@ -306,23 +306,43 @@ router.post('/logout', verifyToken, (req, res) => res.json({ message: 'Logged ou
 /* ─── GET /gym-profile ───────────────────────────────────────── */
 router.get('/gym-profile', verifyToken, async (req, res) => {
   try {
-    const ownerId = req.user.gymId || req.user.userId;
-    const owner = await User.findByPk(ownerId, { attributes: ['gymData', 'gymName', 'name'] });
-    if (!owner) return res.status(404).json({ error: 'Gym profile not found.' });
-    res.json({ gymData: owner.gymData || '{}', gymName: owner.gymName || owner.name || '' });
+    const activeId = req.user.gymId || req.user.userId;
+    
+    // Check if looking at the primary gym (User table)
+    if (Number(activeId) === Number(req.user.userId)) {
+      const owner = await User.findByPk(activeId, { attributes: ['gymData', 'gymName', 'name'] });
+      if (!owner) return res.status(404).json({ error: 'Gym profile not found.' });
+      return res.json({ gymData: owner.gymData || '{}', gymName: owner.gymName || owner.name || '' });
+    } 
+    // Otherwise, looking at an isolated additional gym (Gym table)
+    else {
+      const gym = await Gym.findByPk(activeId, { attributes: ['gymData', 'name'] });
+      if (!gym) return res.status(404).json({ error: 'Gym profile not found.' });
+      return res.json({ gymData: gym.gymData || '{}', gymName: gym.name || '' });
+    }
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 /* ─── PATCH /profile ─────────────────────────────────────────── */
 router.patch('/profile', verifyToken, async (req, res) => {
   try {
-    const ownerId = req.user.gymId || req.user.userId;
-    const owner = await User.findByPk(ownerId);
-    if (!owner) return res.status(404).json({ error: 'Gym profile not found.' });
-    if (req.body.gymData !== undefined) owner.gymData = req.body.gymData;
-    if (req.body.gymName !== undefined) owner.gymName = req.body.gymName;
-    await owner.save();
-    res.json({ message: 'Profile updated.' });
+    const activeId = req.user.gymId || req.user.userId;
+    
+    if (Number(activeId) === Number(req.user.userId)) {
+      const owner = await User.findByPk(activeId);
+      if (!owner) return res.status(404).json({ error: 'Gym profile not found.' });
+      if (req.body.gymData !== undefined) owner.gymData = req.body.gymData;
+      if (req.body.gymName !== undefined) owner.gymName = req.body.gymName;
+      await owner.save();
+      return res.json({ message: 'Profile updated.' });
+    } else {
+      const gym = await Gym.findByPk(activeId);
+      if (!gym) return res.status(404).json({ error: 'Gym profile not found.' });
+      if (req.body.gymData !== undefined) gym.gymData = req.body.gymData;
+      if (req.body.gymName !== undefined) gym.name = req.body.gymName;
+      await gym.save();
+      return res.json({ message: 'Profile updated.' });
+    }
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
