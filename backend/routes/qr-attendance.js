@@ -12,14 +12,14 @@ router.get('/gym-qr', authMiddleware, async (req, res) => {
 
     let gymName = 'GymPro';
 
-    // FIX: Dynamically generate QR based on whether it is a primary or secondary gym
+    // Isolated QR generation
     if (Number(gymId) === Number(userId)) {
       const user = await User.findByPk(userId);
-      if (!user) return res.status(404).json({ error: 'User not found' });
+      if (!user) return res.status(404).json({ error: 'Primary gym not found' });
       gymName = user.name || user.gymName || 'GymPro';
     } else {
       const gym = await Gym.findByPk(gymId);
-      if (!gym) return res.status(404).json({ error: 'Gym not found' });
+      if (!gym) return res.status(404).json({ error: 'Additional gym not found' });
       gymName = gym.name;
     }
 
