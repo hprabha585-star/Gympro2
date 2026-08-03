@@ -62,6 +62,13 @@ const checkAuth = () => {
    MANAGE GYM  -  switch between gyms an owner has, or add a new one
 ══════════════════════════════════════════════════════════════ */
 async function openManageGymModal() {
+  // BUG FIX: every other sidebar nav button routes through showPage(),
+  // which closes the sidebar as a side effect. "Manage Gym" instead calls
+  // this function directly (it's not a page, it's a modal), so it never
+  // closed the sidebar — leaving the sidebar open behind the modal, as
+  // seen in the screenshot. Close it explicitly here.
+  closeSidebar();
+
   openModal('manageGymModal');
   const container = document.getElementById('gymListContainer');
   container.innerHTML = '<div style="text-align:center;padding:20px;color:#8AABAB">Loading...</div>';
