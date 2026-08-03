@@ -42,6 +42,40 @@ async function start() {
     await sequelize.authenticate();
     console.log('✅ MySQL Connected');
 
+    // SELF-HEALING: members/trainers/attendances.userId is intentionally
+    // dual-purpose — either a gym owner's User.id, or a Gym.id for an
+    // additional gym added via Manage Gym. An earlier version of the
+    // models let Sequelize create a real foreign key from this column to
+    // `users.id`, which correctly rejects the second case ("Cannot add or
+    // update a child row: a foreign key constraint fails ...
+    // members_ibfk_1"). The models no longer define that constraint, but
+    // MySQL doesn't retroactively remove one that already exists — drop
+    // it explicitly here. This is also why some index cleanup below
+    // previously logged "needed in a foreign key constraint" — dropping
+    // the FK first lets that cleanup fully succeed too.
+    async function dropUserForeignKeys(tableName) {
+      try {
+        const [fks] = await sequelize.query(`
+          SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${tableName}'
+            AND REFERENCED_TABLE_NAME = 'users' AND COLUMN_NAME = 'userId'
+        `);
+        for (const fk of fks) {
+          try {
+            await sequelize.query(`ALTER TABLE \`${tableName}\` DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+            console.log(`✅ ${tableName}: dropped foreign key ${fk.CONSTRAINT_NAME} (userId no longer FK-constrained to users)`);
+          } catch (e) {
+            console.warn(`   ⚠️ could not drop FK "${fk.CONSTRAINT_NAME}" on ${tableName}: ${e.message}`);
+          }
+        }
+      } catch (e) {
+        // Table doesn't exist yet on a fresh database — nothing to clean, that's fine
+      }
+    }
+    for (const t of ['members', 'trainers', 'attendances']) {
+      await dropUserForeignKeys(t);
+    }
+
     // SELF-HEALING: repeated `sync({ alter: true })` runs across many
     // redeploys piled up near-duplicate indexes on several tables — one
     // hit MySQL's hard cap of 64 indexes per table, which then made EVERY
