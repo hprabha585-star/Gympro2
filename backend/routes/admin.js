@@ -1,10 +1,10 @@
 const express = require('express');
 const router  = express.Router();
-const { User, Gym } = require('../models');
+const { User, Gym, Member, Trainer, Attendance } = require('../models');
 const { verifyToken, adminOnly, superAdminOnly } = require('./auth');
 
 // ══════════════════════════════════════════════════════════════
-//  SUPERADMIN routes  —  only hprabha585@gmail.com
+//  SUPERADMIN routes
 // ══════════════════════════════════════════════════════════════
 
 router.get('/gyms', verifyToken, superAdminOnly, async (req, res) => {
@@ -29,49 +29,80 @@ router.get('/all-gyms-stats', verifyToken, superAdminOnly, async (req, res) => {
 
 router.delete('/gym/:gymId', verifyToken, superAdminOnly, async (req, res) => {
   try {
-    const gym = await User.findOne({ where: { id: req.params.gymId, role: 'admin' } });
-    if (!gym) return res.status(404).json({ error: 'Gym account not found.' });
-    await User.destroy({ where: { gymId: gym.id, role: 'staff' } });
-    await gym.destroy();
-    res.json({ message: `${gym.gymName || gym.name} removed.` });
+    const gymIdParam = String(req.params.gymId);
+
+    // Differentiate additional gyms vs primary gyms
+    if (gymIdParam.startsWith('g_')) {
+      const id = gymIdParam.replace('g_', '');
+      const gym = await Gym.findByPk(id);
+      if (!gym) return res.status(404).json({ error: 'Gym not found.' });
+
+      await Attendance.destroy({ where: { userId: gym.id } });
+      await Member.destroy({ where: { userId: gym.id } });
+      await Trainer.destroy({ where: { userId: gym.id } });
+      await gym.destroy();
+
+      return res.json({ message: `${gym.name} removed.` });
+    } else {
+      const gym = await User.findOne({ where: { id: gymIdParam, role: 'admin' } });
+      if (!gym) return res.status(404).json({ error: 'Gym account not found.' });
+
+      await Attendance.destroy({ where: { userId: gym.id } });
+      await Member.destroy({ where: { userId: gym.id } });
+      await Trainer.destroy({ where: { userId: gym.id } });
+      await User.destroy({ where: { gymId: gym.id, role: 'staff' } });
+      await gym.destroy();
+
+      return res.json({ message: `${gym.gymName || gym.name} removed.` });
+    }
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.patch('/gym/:gymId/toggle', verifyToken, superAdminOnly, async (req, res) => {
   try {
-    const gym = await User.findOne({ where: { id: req.params.gymId, role: 'admin' } });
-    if (!gym) return res.status(404).json({ error: 'Gym not found.' });
-    gym.isActive = !gym.isActive;
-    await gym.save();
-    res.json({ message: `${gym.gymName || gym.name} is now ${gym.isActive ? 'active' : 'suspended'}.`, isActive: gym.isActive });
+    const gymIdParam = String(req.params.gymId);
+
+    if (gymIdParam.startsWith('g_')) {
+      return res.status(400).json({ error: 'Suspending additional gyms is not supported.' });
+    } else {
+      const gym = await User.findOne({ where: { id: gymIdParam, role: 'admin' } });
+      if (!gym) return res.status(404).json({ error: 'Gym not found.' });
+      gym.isActive = !gym.isActive;
+      await gym.save();
+      return res.json({ message: `${gym.gymName || gym.name} is now ${gym.isActive ? 'active' : 'suspended'}.`, isActive: gym.isActive });
+    }
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// PATCH /admin/gym/:gymId/member-limit — superadmin sets/changes a gym's member cap
 router.patch('/gym/:gymId/member-limit', verifyToken, superAdminOnly, async (req, res) => {
   try {
-    const gym = await User.findOne({ where: { id: req.params.gymId, role: 'admin' } });
-    if (!gym) return res.status(404).json({ error: 'Gym not found.' });
+    const gymIdParam = String(req.params.gymId);
+    const { limit } = req.body; 
+    const limitVal = (limit === null || limit === undefined || limit === '' || Number(limit) <= 0) ? null : Math.floor(Number(limit));
 
-    const { limit } = req.body; // null/0/undefined => unlimited
-    gym.memberLimit = (limit === null || limit === undefined || limit === '' || Number(limit) <= 0)
-      ? null
-      : Math.floor(Number(limit));
-    await gym.save();
-
-    res.json({
-      message: gym.memberLimit
-        ? `${gym.gymName || gym.name} member limit set to ${gym.memberLimit}.`
-        : `${gym.gymName || gym.name} member limit removed (unlimited).`,
-      memberLimit: gym.memberLimit
-    });
+    if (gymIdParam.startsWith('g_')) {
+      const id = gymIdParam.replace('g_', '');
+      const gym = await Gym.findByPk(id);
+      if (!gym) return res.status(404).json({ error: 'Gym not found.' });
+      gym.memberLimit = limitVal;
+      await gym.save();
+      return res.json({
+        message: gym.memberLimit ? `${gym.name} member limit set to ${gym.memberLimit}.` : `${gym.name} member limit removed.`,
+        memberLimit: gym.memberLimit
+      });
+    } else {
+      const gym = await User.findOne({ where: { id: gymIdParam, role: 'admin' } });
+      if (!gym) return res.status(404).json({ error: 'Gym not found.' });
+      gym.memberLimit = limitVal;
+      await gym.save();
+      return res.json({
+        message: gym.memberLimit ? `${gym.gymName || gym.name} member limit set to ${gym.memberLimit}.` : `${gym.gymName || gym.name} member limit removed.`,
+        memberLimit: gym.memberLimit
+      });
+    }
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Additional-gym approvals (an existing owner adding gym #2, #3, etc.) ──
-
-// GET /admin/pending-gyms — additional gyms awaiting approval (not the
-// original owner-account approvals, which stay under /auth/pending-approvals)
 router.get('/pending-gyms', verifyToken, superAdminOnly, async (req, res) => {
   try {
     const pending = await Gym.findAll({
@@ -83,7 +114,6 @@ router.get('/pending-gyms', verifyToken, superAdminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /admin/approve-gym/:gymId
 router.post('/approve-gym/:gymId', verifyToken, superAdminOnly, async (req, res) => {
   try {
     const gym = await Gym.findByPk(req.params.gymId);
@@ -103,7 +133,6 @@ router.post('/approve-gym/:gymId', verifyToken, superAdminOnly, async (req, res)
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /admin/reject-gym/:gymId
 router.post('/reject-gym/:gymId', verifyToken, superAdminOnly, async (req, res) => {
   try {
     const gym = await Gym.findByPk(req.params.gymId);
@@ -117,7 +146,7 @@ router.post('/reject-gym/:gymId', verifyToken, superAdminOnly, async (req, res) 
 });
 
 // ══════════════════════════════════════════════════════════════
-//  GYM ADMIN routes  —  gym owner manages their staff
+//  GYM ADMIN routes
 // ══════════════════════════════════════════════════════════════
 
 router.get('/staff', verifyToken, adminOnly, async (req, res) => {
@@ -135,7 +164,7 @@ router.get('/staff', verifyToken, adminOnly, async (req, res) => {
 router.post('/create-staff', verifyToken, adminOnly, async (req, res) => {
   try {
     if (req.user.role === 'superadmin')
-      return res.status(400).json({ error: 'Superadmin does not manage staff. Use a gym admin account.' });
+      return res.status(400).json({ error: 'Superadmin does not manage staff.' });
 
     const { name, email, password, permissions } = req.body;
     if (!name || !email || !password)
@@ -146,16 +175,6 @@ router.post('/create-staff', verifyToken, adminOnly, async (req, res) => {
     if (existing) return res.status(400).json({ error: 'Email already registered.' });
 
     const admin = await User.findByPk(req.user.userId);
-    // BUG FIX: this used to read `admin.gymId` (a column on the admin's OWN
-    // User row, which is always null — gymId is a field staff rows use to
-    // point back to their gym, not something an admin's own account sets).
-    // That meant `admin.gymId || admin.id` always fell through to
-    // `admin.id` — the admin's PRIMARY gym — no matter which gym the admin
-    // had actually switched to via "Manage Gym". Every staff member ended
-    // up attached to gym #1 even when created while gym #2 was active.
-    // req.user.gymId is the CURRENTLY ACTIVE gym from the JWT (switch-gym
-    // sets this correctly per-session) — use that instead so staff are
-    // created under whichever gym is actually selected right now.
     const gymId = req.user.gymId || req.user.userId;
 
     const defaultPerms = {
@@ -205,14 +224,6 @@ router.patch('/user/:userId/toggle', verifyToken, adminOnly, async (req, res) =>
     const user = await User.findByPk(req.params.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
-    // BUG FIX: this had no ownership check at all — any gym admin could
-    // toggle ANY user's active status just by knowing their id, including
-    // staff belonging to a totally different gym. Scope it:
-    //   - superadmin may toggle a gym-owner ('admin' role) account, same
-    //     as before (used by the Control Panel's All Gyms list).
-    //   - a gym admin may ONLY toggle a 'staff' user that belongs to
-    //     their own currently-active gym (from the JWT, respects
-    //     whichever gym they've switched to).
     if (req.user.role === 'superadmin') {
       if (user.role !== 'admin')
         return res.status(403).json({ error: 'Super-admin can only toggle gym-owner accounts here.' });
@@ -235,10 +246,6 @@ router.delete('/user/:userId', verifyToken, adminOnly, async (req, res) => {
     const user = await User.findByPk(req.params.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
-    // BUG FIX: same missing ownership check as the toggle route above —
-    // any admin could delete any user by id, across gyms. This route is
-    // only ever used to delete STAFF, so require the target to be staff
-    // belonging to the requester's own currently-active gym.
     const gymId = Number(req.user.gymId || req.user.userId);
     if (user.role !== 'staff' || Number(user.gymId) !== gymId)
       return res.status(403).json({ error: 'Not your staff member.' });
@@ -250,14 +257,44 @@ router.delete('/user/:userId', verifyToken, adminOnly, async (req, res) => {
 
 router.get('/all-gyms', verifyToken, async (req, res) => {
   try {
-    if (req.user.role !== 'superadmin')
-      return res.status(403).json({ error: 'Super-admin only.' });
-    const gyms = await User.findAll({
-      where: { role: 'admin' },
-      attributes: { exclude: ['password'] },
-      order: [['createdAt', 'DESC']]
+    if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'Super-admin only.' });
+    
+    // Combine Primary and Additional Gyms for Superadmin Control Panel
+    const primaryGyms = await User.findAll({
+      where: { role: 'admin', isApproved: true },
+      attributes: { exclude: ['password'] }
     });
-    res.json(gyms);
+
+    const additionalGyms = await Gym.findAll({
+      where: { isApproved: true },
+      include: [{ model: User, attributes: ['name', 'email'] }]
+    });
+
+    const list = [
+      ...primaryGyms.map(u => ({
+        _id: String(u.id),
+        isPrimary: true,
+        gymName: u.gymName || u.name,
+        ownerName: u.name,
+        email: u.email,
+        isActive: u.isActive,
+        memberLimit: u.memberLimit,
+        createdAt: u.createdAt
+      })),
+      ...additionalGyms.map(g => ({
+        _id: `g_${g.id}`,
+        isPrimary: false,
+        gymName: g.name,
+        ownerName: g.User ? g.User.name : 'Unknown',
+        email: g.User ? g.User.email : 'Unknown',
+        isActive: true, 
+        memberLimit: g.memberLimit,
+        createdAt: g.createdAt
+      }))
+    ];
+
+    list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.json(list);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -271,10 +308,7 @@ router.get('/users', verifyToken, superAdminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Staff password reset — approved by their gym admin ─────────────
-
-// GET /admin/pending-staff-password-resets — staff of the CURRENTLY
-// ACTIVE gym (respects Manage Gym) awaiting a password reset
+// ── Staff password reset ─────────────
 router.get('/pending-staff-password-resets', verifyToken, adminOnly, async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
@@ -287,7 +321,6 @@ router.get('/pending-staff-password-resets', verifyToken, adminOnly, async (req,
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /admin/approve-staff-password-reset/:userId
 router.post('/approve-staff-password-reset/:userId', verifyToken, adminOnly, async (req, res) => {
   try {
     const { newPassword } = req.body;
@@ -299,7 +332,7 @@ router.post('/approve-staff-password-reset/:userId', verifyToken, adminOnly, asy
     if (!staff || staff.role !== 'staff' || Number(staff.gymId) !== gymId)
       return res.status(403).json({ error: 'Not your staff member.' });
 
-    staff.password = newPassword; // beforeSave hook re-hashes automatically
+    staff.password = newPassword; 
     staff.resetRequested = false;
     staff.resetRequestedAt = null;
     await staff.save();
@@ -308,7 +341,6 @@ router.post('/approve-staff-password-reset/:userId', verifyToken, adminOnly, asy
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /admin/reject-staff-password-reset/:userId
 router.post('/reject-staff-password-reset/:userId', verifyToken, adminOnly, async (req, res) => {
   try {
     const gymId = Number(req.user.gymId || req.user.userId);
