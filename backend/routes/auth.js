@@ -1,7 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const jwt     = require('jsonwebtoken');
-const { User, Gym } = require('../models');
+const { User, Gym, Member, Trainer, Attendance } = require('../models');
 const { body, validationResult } = require('express-validator');
 
 const JWT_SECRET  = process.env.JWT_SECRET || 'gympro_secret_key_2024';
@@ -35,8 +35,6 @@ function makeToken(user) {
   );
 }
 
-// Same as makeToken but with gymId/gymName overridden — used when a gym
-// owner switches which of their gyms is "active" without logging out.
 function makeTokenForGym(user, gymId, gymName) {
   return jwt.sign(
     { userId: user.id, email: user.email, role: user.role,
@@ -122,12 +120,7 @@ router.post('/register-staff', [
   }
 });
 
-/* ─── POST /register-superadmin — PUBLIC request for a super-admin account.
-   Reachable straight from the login page (no existing superadmin needed —
-   solves the bootstrap problem on a fresh database). The account is
-   created PENDING regardless of who submits it; the site owner must
-   approve it directly in the database. This is intentionally public but
-   safe: nothing it creates can ever log in without that manual DB step. */
+/* ─── POST /register-superadmin ── */
 router.post('/register-superadmin', [
   body('name').notEmpty(),
   body('email').isEmail(),
@@ -247,7 +240,6 @@ router.post('/approve/:userId', verifyToken, superAdminOnly, async (req, res) =>
     user.rejectionReason = '';
     if (!user.gymId) user.gymId = user.id;
 
-    // Optional member limit, set at approval time (or left unlimited)
     if (req.body.memberLimit !== undefined) {
       const lim = req.body.memberLimit;
       user.memberLimit = (lim === null || lim === '' || Number(lim) <= 0) ? null : Math.floor(Number(lim));
@@ -298,10 +290,6 @@ router.post('/reject-staff/:userId', verifyToken, adminOnly, async (req, res) =>
     const staff = await User.findByPk(req.params.userId);
     if (!staff || staff.role !== 'staff') return res.status(404).json({ error: 'Staff not found.' });
 
-    // BUG FIX: unlike approve-staff (just above), this had no check that
-    // the staff request actually belongs to the requesting admin's own
-    // gym — any admin could reject (and deactivate) a pending staff
-    // request from a completely different gym just by knowing its userId.
     const gymId = Number(req.user.gymId || req.user.userId);
     if (Number(staff.gymId) !== gymId) return res.status(403).json({ error: 'Not your staff request.' });
 
@@ -340,9 +328,6 @@ router.patch('/profile', verifyToken, async (req, res) => {
 
 /* ══════════════════════════════════════════════════════════════
    MULTI-GYM SUPPORT
-   An owner's original account IS their first gym (gymId = own User.id,
-   unchanged from before). Additional gyms are separate `Gym` rows that
-   need superadmin approval before they can be switched to.
 ══════════════════════════════════════════════════════════════ */
 
 /* ─── GET /my-gyms — list every gym this owner has (primary + extras) ─── */
@@ -418,13 +403,11 @@ router.post('/switch-gym', verifyToken, adminOnly, async (req, res) => {
     const owner = await User.findByPk(req.user.userId);
     if (!owner) return res.status(404).json({ error: 'Account not found.' });
 
-    // Case 1: switching to their own original/primary gym
     if (Number(gymId) === owner.id) {
       const token = makeTokenForGym(owner, owner.id, owner.gymName || owner.name);
       return res.json({ message: `Switched to ${owner.gymName || owner.name}.`, token, gymName: owner.gymName || owner.name });
     }
 
-    // Case 2: switching to an approved additional gym they own
     const gym = await Gym.findOne({ where: { id: gymId, ownerId: owner.id } });
     if (!gym) return res.status(404).json({ error: 'Gym not found or not yours.' });
     if (!gym.isApproved) return res.status(403).json({ error: `"${gym.name}" is still pending superadmin approval.` });
@@ -434,10 +417,29 @@ router.post('/switch-gym', verifyToken, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ─── POST /create-superadmin — an existing superadmin submits a request
-   for a NEW superadmin account. It is created PENDING, not active — the
-   site owner approves it directly in the database (not through the app),
-   for an extra layer of control over who gets top-level access. ────── */
+/* ─── DELETE /my-gym/:id — admin deletes their own additional gym ──── */
+router.delete('/my-gym/:id', verifyToken, adminOnly, async (req, res) => {
+  try {
+    if (req.user.role === 'superadmin') return res.status(400).json({ error: 'Superadmin does not own gyms.' });
+
+    // Cannot delete the primary User account from this gym switcher
+    if (Number(req.params.id) === Number(req.user.userId)) {
+      return res.status(400).json({ error: 'Cannot delete your primary gym here. Contact GymPro support to delete your entire account.' });
+    }
+
+    const gym = await Gym.findOne({ where: { id: req.params.id, ownerId: req.user.userId } });
+    if (!gym) return res.status(404).json({ error: 'Gym not found or not yours.' });
+
+    await Attendance.destroy({ where: { userId: gym.id } });
+    await Member.destroy({ where: { userId: gym.id } });
+    await Trainer.destroy({ where: { userId: gym.id } });
+
+    await gym.destroy();
+    res.json({ message: `"${gym.name}" has been permanently deleted.` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ─── POST /create-superadmin ── */
 router.post('/create-superadmin', verifyToken, superAdminOnly, async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -454,20 +456,14 @@ router.post('/create-superadmin', verifyToken, superAdminOnly, async (req, res) 
     });
 
     res.status(201).json({
-      message: `Request submitted for ${name}. This account cannot log in yet — ` +
-        `it must be approved directly in the database (set isApproved=1, pendingApproval=0 ` +
-        `on the users table for this email) before it becomes active.`,
+      message: `Request submitted for ${name}. This account must be approved directly in the database.`,
       user: { id: newSuperadmin.id, name: newSuperadmin.name, email: newSuperadmin.email }
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 /* ══════════════════════════════════════════════════════════════
-   PASSWORD RESET — request + approval chain
-   Admins need superadmin approval. Staff need their gym admin's
-   approval (separate endpoints, in routes/admin.js). Nothing changes
-   the password until that approval happens — this endpoint only
-   raises a flag.
+   PASSWORD RESET
 ══════════════════════════════════════════════════════════════ */
 router.post('/request-password-reset', [
   body('email').isEmail()
@@ -480,18 +476,17 @@ router.post('/request-password-reset', [
     const user = await User.findOne({ where: { email } });
     if (!user) return res.status(404).json({ error: 'No account found with that email.' });
     if (user.role === 'superadmin')
-      return res.status(400).json({ error: 'Super-admin passwords are reset directly in the database — contact the site owner.' });
+      return res.status(400).json({ error: 'Super-admin passwords are reset directly in the database.' });
 
     user.resetRequested = true;
     user.resetRequestedAt = new Date();
     await user.save();
 
     const approver = user.role === 'admin' ? 'GymPro (super-admin)' : 'your gym admin';
-    res.json({ message: `Request submitted. ${approver} will review it and set a new password for you.` });
+    res.json({ message: `Request submitted. ${approver} will review it.` });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ─── GET /pending-password-resets — admin accounts awaiting superadmin approval ── */
 router.get('/pending-password-resets', verifyToken, superAdminOnly, async (req, res) => {
   try {
     const list = await User.findAll({
@@ -503,7 +498,6 @@ router.get('/pending-password-resets', verifyToken, superAdminOnly, async (req, 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ─── POST /approve-password-reset/:userId — superadmin sets the new password ── */
 router.post('/approve-password-reset/:userId', verifyToken, superAdminOnly, async (req, res) => {
   try {
     const { newPassword } = req.body;
@@ -513,7 +507,7 @@ router.post('/approve-password-reset/:userId', verifyToken, superAdminOnly, asyn
     const user = await User.findByPk(req.params.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
-    user.password = newPassword; // beforeSave hook re-hashes automatically
+    user.password = newPassword; 
     user.resetRequested = false;
     user.resetRequestedAt = null;
     await user.save();
@@ -522,7 +516,6 @@ router.post('/approve-password-reset/:userId', verifyToken, superAdminOnly, asyn
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-/* ─── POST /reject-password-reset/:userId ────────────────────────────── */
 router.post('/reject-password-reset/:userId', verifyToken, superAdminOnly, async (req, res) => {
   try {
     const user = await User.findByPk(req.params.userId);
