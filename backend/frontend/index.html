@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="manifest" href="/manifest.json">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#1A8C8C">
+  <title>GymPro</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    /* Additional styles for revenue dashboard */
+    .rev-month-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .rev-month-card {
+      background: #F8FFFE;
+      border-radius: 12px;
+      padding: 10px 8px;
+      text-align: center;
+      border: 1px solid #E0ECEC;
+    }
+    .rev-month-label {
+      font-size: .6rem;
+      font-weight: 800;
+      color: #8AABAB;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+    .rev-month-amount {
+      font-size: .95rem;
+      font-weight: 800;
+      color: #1A8C8C;
+      margin-top: 3px;
+    }
+    .rev-breakdown {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 8px;
+      font-size: .7rem;
+    }
+    .rev-breakdown span {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      border-bottom: 1px dashed #F0F5F5;
+    }
+    .payment-method-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: .6rem;
+      font-weight: 700;
+    }
+    .pm-upi { background: #E3F2FD; color: #1565C0; }
+    .pm-cash { background: #E8F8EF; color: #27AE60; }
+    .pm-card { background: #F3E5F5; color: #6A1B9A; }
+    .payment-history-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #F0F5F5;
+      font-size: .75rem;
+    }
+    .payment-history-item:last-child { border-bottom: none; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<nav class="sidebar" id="sidebar">
+  <div class="sb-top">
+    <div class="sb-brand">
+      <div class="sb-logo">🏋️</div>
+      <span class="sb-name">GymPro</span>
+    </div>
+    <button class="sb-close" onclick="closeSidebar()">✕</button>
+  </div>
+
+  <div class="sb-user" id="sbUser">
+    <div class="u-name">Loading…</div>
+    <div class="u-role">—</div>
+  </div>
+
+  <div class="sb-body">
+    <div class="sb-section">Main</div>
+    <button class="nav-btn active" onclick="showPage('dashboard',this);updateBNav('dashboard')" data-page="dashboard">
+      <span class="ni">📊</span>Dashboard
+    </button>
+    <button class="nav-btn" onclick="showPage('members',this);updateBNav('members')" data-page="members">
+      <span class="ni">👥</span>Members
+    </button>
+    <button class="nav-btn" onclick="showPage('attendance',this);updateBNav('attendance')" data-page="attendance">
+      <span class="ni">📅</span>Attendance
+    </button>
+
+    <div class="sb-section">Manage</div>
+    <button class="nav-btn" onclick="showPage('trainers',this);updateBNav('none')" data-page="trainers">
+      <span class="ni">💪</span>Trainers
+    </button>
+    <button class="nav-btn" id="navPtBlock" onclick="showPage('ptblock',this);updateBNav('none')" data-page="ptblock">
+      <span class="ni">🏋️</span>PT Members
+    </button>
+    <button class="nav-btn" onclick="showPage('plans',this);updateBNav('none')" data-page="plans">
+      <span class="ni">💎</span>Plans
+    </button>
+    <button class="nav-btn" onclick="showPage('discounts',this);updateBNav('none')" data-page="discounts">
+      <span class="ni">🏷️</span>Discounts
+    </button>
+    <button class="nav-btn" onclick="showPage('payments',this);updateBNav('none')" data-page="payments">
+      <span class="ni">💰</span>Payments
+    </button>
+    <!-- superadmin nav -->
+    <button class="nav-btn" id="navSuperAdmin" style="display:none" onclick="showPage('superadmin',this);updateBNav('none')" data-page="superadmin">
+      <span class="ni">🏆</span>Control Panel
+    </button>
+    <!-- gymadmin nav -->
+    <button class="nav-btn" id="navGymAdmin" style="display:none" onclick="showPage('gymadmin',this);updateBNav('none')" data-page="gymadmin">
+      <span class="ni">👥</span>Staff Mgmt
+    </button>
+    <button class="nav-btn" id="navRevenue" onclick="showPage('revenue',this);updateBNav('none')" data-page="revenue">
+      <span class="ni">📈</span>Revenue
+    </button>
+    <button class="nav-btn" id="navManageGym" style="display:none" onclick="openManageGymModal()" data-page="none">
+      <span class="ni">🏢</span>Manage Gym
+    </button>
+    <button class="nav-btn" onclick="showPage('settings',this);updateBNav('none')" data-page="settings">
+      <span class="ni">⚙️</span>Settings
+    </button>
+    <button class="nav-btn" onclick="window.location.href='/gym-qr.html'" data-page="none">
+      <span class="ni">📱</span>Gym QR Code
+    </button>
+    <button class="nav-btn" onclick="window.location.href='/scan-stats.html'" data-page="none">
+      <span class="ni">📊</span>Today's Check-ins
+    </button>
+  </div>
+
+  <div class="sb-foot">
+    <button class="logout-btn" onclick="logout()">🚪 Logout</button>
+  </div>
+</nav>
+
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<!-- ═══════════════════════════════ TOPBAR ═══════════════════════════════ -->
+<div class="topbar">
+  <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+  <span class="topbar-title" id="pageTitle">Dashboard</span>
+  <span class="topbar-date" id="topDate"></span>
+</div>
+<div id="activeGymBanner" style="display:none;background:#1A2E2E;color:#fff;padding:7px 16px;font-size:.75rem;font-weight:700;text-align:center;letter-spacing:.3px">
+  🏢 <span id="activeGymName">—</span>
+</div>
+
+<div id="offline-banner">⚠️ You are offline — viewing saved data.</div>
+
+<!-- ═══════════════════════════════ BOTTOM NAV ═══════════════════════════════ -->
+<nav class="bottom-nav">
+  <button class="bn-item active" id="bn-dashboard"
+    onclick="showPage('dashboard',document.querySelector('[data-page=dashboard]'));updateBNav('dashboard')">
+    <i>📊</i><span>Home</span>
+  </button>
+  <button class="bn-item" id="bn-members"
+    onclick="showPage('members',document.querySelector('[data-page=members]'));updateBNav('members')">
+    <i>👥</i><span>Members</span>
+  </button>
+  <button class="bn-item" id="bn-attendance"
+    onclick="showPage('attendance',document.querySelector('[data-page=attendance]'));updateBNav('attendance')">
+    <i>📅</i><span>Attend</span>
+  </button>
+  <button class="bn-item" id="bn-menu" onclick="toggleSidebar()">
+    <i>☰</i><span>More</span>
+  </button>
+</nav>
+
+<!-- ═══════════════════════════════ MAIN ═══════════════════════════════ -->
+<main class="main">
+
+  <!-- ──────────────── DASHBOARD ──────────────── -->
+  <div id="page-dashboard" class="page active">
+    <!-- Staff pending banner (admin only) -->
+    <div id="staffPendingBanner" style="display:none;background:#FEF9E7;border:1px solid #FDE68A;border-radius:14px;padding:12px 14px;margin-bottom:10px;align-items:center;justify-content:space-between;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:1.2rem">&#x23F3;</span>
+        <span style="font-size:.82rem;font-weight:700;color:#D97706"></span>
+      </div>
+      <button onclick="showPage('gymadmin',document.querySelector('[data-page=gymadmin]'));updateBNav('none')" style="background:#F39C12;color:#fff;border:none;border-radius:9px;padding:7px 14px;font-family:inherit;font-size:.78rem;font-weight:800;cursor:pointer">Review &#x2192;</button>
+    </div>
+
+    <div id="alertBanner" class="banner green">
+      <div class="banner-text"><h3>✅ All Good!</h3><p>No payments due this week</p></div>
+    </div>
+
+    <div style="font-size:.7rem;font-weight:800;color:#8AABAB;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding:0 2px" id="dashTodayLabel">Today</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div style="background:#1A8C8C;border-radius:18px;padding:16px 14px;cursor:pointer;position:relative;overflow:hidden"
+        onclick="showPage('attendance',document.querySelector('[data-page=attendance]'));updateBNav('attendance')">
+        <div style="position:absolute;top:-12px;right:-12px;width:60px;height:60px;background:rgba(255,255,255,.1);border-radius:50%"></div>
+        <div style="font-size:1.8rem;margin-bottom:6px">📅</div>
+        <div style="font-size:1.7rem;font-weight:800;color:#fff;line-height:1" id="statActive">—</div>
+        <div style="font-size:.72rem;color:rgba(255,255,255,.75);font-weight:600;margin-top:4px">Today's Attendance</div>
+        <div style="font-size:.62rem;color:rgba(255,255,255,.5);margin-top:2px">Tap to mark ›</div>
+      </div>
+      <div style="background:#fff;border:1px solid #E0ECEC;border-radius:18px;padding:16px 14px;cursor:pointer;position:relative;overflow:hidden">
+        <div style="position:absolute;top:-12px;right:-12px;width:60px;height:60px;background:#F0FAFA;border-radius:50%"></div>
+        <div style="font-size:1.8rem;margin-bottom:6px">👥</div>
+        <div style="font-size:1.7rem;font-weight:800;color:#1A2E2E;line-height:1" id="statTotal">—</div>
+        <div style="font-size:.72rem;color:#8AABAB;font-weight:600;margin-top:4px">Total Members</div>
+        <div style="font-size:.62rem;color:#B0C4C4;margin-top:2px">All status</div>
+      </div>
+    </div>
+
+    <!-- Revenue Summary (admin only) -->
+    <div id="dashRevenueSummary" style="background:#fff;border:1px solid #E0ECEC;border-radius:18px;padding:16px;margin-bottom:10px">
+      <div style="font-size:.7rem;font-weight:800;color:#8AABAB;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">Revenue Summary</div>
+      
+      <!-- Last 3 Months Revenue -->
+      <div class="rev-month-grid" id="revMonthGrid">
+        <div class="rev-month-card">
+          <div class="rev-month-label" id="revMonth1Label">Month 1</div>
+          <div class="rev-month-amount" id="revMonth1">₹0</div>
+        </div>
+        <div class="rev-month-card">
+          <div class="rev-month-label" id="revMonth2Label">Month 2</div>
+          <div class="rev-month-amount" id="revMonth2">₹0</div>
+        </div>
+        <div class="rev-month-card">
+          <div class="rev-month-label" id="revMonth3Label">Month 3</div>
+          <div class="rev-month-amount" id="revMonth3">₹0</div>
+        </div>
+      </div>
+
+      <!-- Breakdown -->
+      <div class="rev-breakdown">
+        <span><span>💪 Plan Fees</span><span id="revPlanTotal">₹0</span></span>
+        <span><span>🎟️ Admission</span><span id="revAdmissionTotal">₹0</span></span>
+        <span><span>🏋️ PT Fees</span><span id="revPTTotal">₹0</span></span>
+        <span><span>📱 Online (UPI+Card)</span><span id="revOnlineTotal">₹0</span></span>
+        <span><span>💵 Cash</span><span id="revCashTotal">₹0</span></span>
+        <span style="font-weight:800;border-bottom:2px solid #1A8C8C;padding-top:6px;margin-top:4px">
+          <span>Total Revenue</span>
+          <span id="revGrandTotal" style="color:#1A8C8C;font-size:.9rem">₹0</span>
+        </span>
+        <span style="font-weight:800;color:#27AE60;padding-top:4px">
+          <span>🗓️ Today's Collection</span>
+          <span id="revTodayTotal" style="color:#27AE60;font-size:.9rem">₹0</span>
+        </span>
+      </div>
+    </div>
+
+    <div style="font-size:.7rem;font-weight:800;color:#8AABAB;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding:0 2px">Membership Alerts</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+      <div style="background:#fff;border:1px solid #FECDD5;border-radius:14px;padding:10px 6px;text-align:center" onclick="filterDash(0)">
+        <div style="font-size:1.2rem;font-weight:800;color:#E74C3C" id="statExpToday">0</div>
+        <div style="font-size:.55rem;color:#8AABAB;font-weight:700;margin-top:3px;line-height:1.3">Expires<br>Today</div>
+      </div>
+      <div style="background:#fff;border:1px solid #FED7AA;border-radius:14px;padding:10px 6px;text-align:center" onclick="filterDash(3)">
+        <div style="font-size:1.2rem;font-weight:800;color:#F39C12" id="statExp3">0</div>
+        <div style="font-size:.55rem;color:#8AABAB;font-weight:700;margin-top:3px;line-height:1.3">In<br>1–3d</div>
+      </div>
+      <div style="background:#fff;border:1px solid #FED7AA;border-radius:14px;padding:10px 6px;text-align:center" onclick="filterDash(7)">
+        <div style="font-size:1.2rem;font-weight:800;color:#F39C12" id="statExp7">0</div>
+        <div style="font-size:.55rem;color:#8AABAB;font-weight:700;margin-top:3px;line-height:1.3">In<br>4–7d</div>
+      </div>
+      <div style="background:#fff;border:1px solid #E0ECEC;border-radius:14px;padding:10px 6px;text-align:center" onclick="filterDash(15)">
+        <div style="font-size:1.2rem;font-weight:800;color:#4A6464" id="statExp15">0</div>
+        <div style="font-size:.55rem;color:#8AABAB;font-weight:700;margin-top:3px;line-height:1.3">In<br>8–15d</div>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #E0ECEC;border-radius:18px;overflow:hidden;margin-bottom:8px">
+      <div style="padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:4px;height:20px;background:#1A8C8C;border-radius:4px"></div>
+          <span style="font-size:.95rem;font-weight:800;color:#1A2E2E">Expiring Soon</span>
+        </div>
+        <div style="display:flex;gap:5px">
+          <button style="padding:5px 11px;border-radius:20px;border:1.5px solid #D5D5DF;background:#fff;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;color:#4A6464;min-height:32px" onclick="filterDash(3)">3d</button>
+          <button style="padding:5px 11px;border-radius:20px;border:1.5px solid #D5D5DF;background:#fff;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;color:#4A6464;min-height:32px" onclick="filterDash(5)">5d</button>
+          <button style="padding:5px 11px;border-radius:20px;border:1.5px solid #D5D5DF;background:#fff;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;color:#4A6464;min-height:32px" onclick="filterDash(7)">7d</button>
+          <button style="padding:5px 11px;border-radius:20px;border:1.5px solid #D5D5DF;background:#fff;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;color:#4A6464;min-height:32px" onclick="filterDash('all')">All</button>
+          <button style="padding:5px 13px;border-radius:20px;border:none;background:#1A8C8C;color:#fff;font-family:inherit;font-size:.72rem;font-weight:800;cursor:pointer;min-height:32px" onclick="openModal('addMemberModal')">+ Add</button>
+        </div>
+      </div>
+      <div style="display:flex;padding:7px 14px;background:#F5FBFB">
+        <div style="flex:1;text-align:left;font-size:.62rem;font-weight:800;color:#8AABAB;text-transform:uppercase;letter-spacing:.7px">Member</div>
+        <div style="text-align:right;font-size:.62rem;font-weight:800;color:#8AABAB;text-transform:uppercase;letter-spacing:.7px">Expires / Status</div>
+      </div>
+      <div id="dashBody">
+        <div class="empty"><div class="ei">⏳</div><p>Loading…</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────── MEMBERS ──────────────── -->
+  <div id="page-members" class="page">
+    <div style="position:relative;margin-bottom:10px">
+      <input type="search" id="memberSearch"
+        placeholder='Search Name, Phone or ID #'
+        oninput="searchMembers(this.value)"
+        inputmode="search"
+        style="width:100%;padding:11px 46px 11px 14px;background:#fff;border:1.5px solid #D5D5DF;border-radius:22px;font-family:inherit;font-size:.88rem;font-weight:500;color:#1A2E2E;-webkit-appearance:none;appearance:none;transition:border-color .2s">
+      <button onclick="searchMembers(document.getElementById('memberSearch').value)"
+        style="position:absolute;right:4px;top:4px;bottom:4px;background:#1A8C8C;color:#fff;border:none;border-radius:18px;padding:0 14px;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer">🔍</button>
+    </div>
+
+    <div style="display:flex;gap:8px;overflow-x:auto;margin-bottom:10px;padding-bottom:2px">
+      <button class="member-filter-chip active" onclick="setMembersFilter('all',this)"
+        style="display:inline-flex;align-items:center;padding:7px 14px;border-radius:20px;font-size:.75rem;font-weight:700;white-space:nowrap;cursor:pointer;transition:all .15s;border:1.5px solid #1A8C8C;font-family:inherit;background:#1A8C8C;color:#fff;flex-shrink:0">
+        All Member ▾
+      </button>
+      <button class="member-filter-chip" onclick="setMembersFilter('Active',this)"
+        style="display:inline-flex;align-items:center;padding:7px 14px;border-radius:20px;font-size:.75rem;font-weight:700;white-space:nowrap;cursor:pointer;border:1.5px solid #D5D5DF;font-family:inherit;background:#fff;color:#555566;flex-shrink:0">
+        Active
+      </button>
+      <button class="member-filter-chip" onclick="setMembersFilter('Trial',this)"
+        style="display:inline-flex;align-items:center;padding:7px 14px;border-radius:20px;font-size:.75rem;font-weight:700;white-space:nowrap;cursor:pointer;border:1.5px solid #D5D5DF;font-family:inherit;background:#fff;color:#555566;flex-shrink:0">
+        Trial
+      </button>
+      <button class="member-filter-chip" onclick="setMembersFilter('Expired',this)"
+        style="display:inline-flex;align-items:center;padding:7px 14px;border-radius:20px;font-size:.75rem;font-weight:700;white-space:nowrap;cursor:pointer;border:1.5px solid #D5D5DF;font-family:inherit;background:#fff;color:#555566;flex-shrink:0">
+        Expired
+      </button>
+      <button class="member-filter-chip" onclick="setMembersFilter('Inactive',this)"
+        style="display:inline-flex;align-items:center;padding:7px 14px;border-radius:20px;font-size:.75rem;font-weight:700;white-space:nowrap;cursor:pointer;border:1.5px solid #D5D5DF;font-family:inherit;background:#fff;color:#555566;flex-shrink:0">
+        Inactive
+      </button>
+    </div>
+
+    <div id="membersListWrap">
+      <div class="empty"><div class="ei">⏳</div><p>Loading members…</p></div>
+    </div>
+    <div style="display:none"><table><tbody id="membersBody"></tbody></table></div>
+
+    <button onclick="openModal('addMemberModal')"
+      style="position:fixed;right:1rem;bottom:calc(68px + env(safe-area-inset-bottom));
+        height:48px;background:#1A8C8C;color:#fff;border:none;border-radius:30px;
+        padding:0 20px 0 14px;display:flex;align-items:center;gap:8px;
+        font-family:inherit;font-size:.88rem;font-weight:800;cursor:pointer;
+        box-shadow:0 4px 18px rgba(26,140,140,.45);z-index:800;transition:all .2s">
+      👤 Add Member
+    </button>
+    <div style="height:50px"></div>
+  </div>
+
+  <!-- ──────────────── ATTENDANCE ──────────────── -->
+  <div id="page-attendance" class="page">
+    <div class="card">
+      <div style="padding:14px 16px 10px;border-bottom:1px solid #F0F5F5;display:flex;align-items:center;gap:10px">
+        <div style="width:4px;height:22px;background:#1A8C8C;border-radius:4px;flex-shrink:0"></div>
+        <span style="font-size:1rem;font-weight:800;color:#1A2E2E">Attendance</span>
+      </div>
+      <div style="padding:14px 16px 0">
+        <div style="display:flex;gap:10px;margin-bottom:12px">
+          <input type="date" id="attDate"
+            style="flex:1;min-height:50px;border:2px solid #E0ECEC;border-radius:14px;
+                   font-family:inherit;font-size:.95rem;padding:0 14px;
+                   background:#fff;color:#1A2E2E;font-weight:600;
+                   -webkit-appearance:none;appearance:none;
+                   box-shadow:0 1px 4px rgba(0,0,0,.05)">
+          <button onclick="loadAttendance()"
+            style="min-width:80px;height:50px;background:#1A8C8C;color:#fff;
+                   border:none;border-radius:14px;font-family:inherit;font-size:.95rem;
+                   font-weight:800;cursor:pointer;box-shadow:0 4px 12px rgba(26,140,140,.3)">
+            Load
+          </button>
+        </div>
+        <button onclick="markAllPresent()"
+          style="width:100%;height:52px;background:#27AE60;color:#fff;
+                 border:none;border-radius:14px;font-family:inherit;font-size:.95rem;
+                 font-weight:800;cursor:pointer;margin-bottom:14px;
+                 box-shadow:0 4px 14px rgba(39,174,96,.35);
+                 display:flex;align-items:center;justify-content:center;gap:8px">
+          ✔ Mark All Present
+        </button>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+          <div style="background:#F0FAFA;border-radius:12px;padding:12px 8px;text-align:center;border:1px solid #D5EDED">
+            <div style="font-size:1.5rem;font-weight:800;color:#1A8C8C;line-height:1" id="attTotal">0</div>
+            <div style="font-size:.6rem;font-weight:800;color:#8AABAB;text-transform:uppercase;letter-spacing:.6px;margin-top:4px">Active</div>
+          </div>
+          <div style="background:#F0FAFA;border-radius:12px;padding:12px 8px;text-align:center;border:1px solid #D5EDED">
+            <div style="font-size:1.5rem;font-weight:800;color:#1A8C8C;line-height:1" id="attPresent">0</div>
+            <div style="font-size:.6rem;font-weight:800;color:#8AABAB;text-transform:uppercase;letter-spacing:.6px;margin-top:4px">Present</div>
+          </div>
+          <div style="background:#F0FAFA;border-radius:12px;padding:12px 8px;text-align:center;border:1px solid #D5EDED">
+            <div style="font-size:1.5rem;font-weight:800;color:#1A8C8C;line-height:1" id="attPct">0%</div>
+            <div style="font-size:.6rem;font-weight:800;color:#8AABAB;text-transform:uppercase;letter-spacing:.6px;margin-top:4px">Rate</div>
+          </div>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="padding:8px 6px 8px 12px">Member / Plan</th>
+              <th style="padding:8px 12px 8px 6px;text-align:right">Status / Action</th>
+            </tr>
+          </thead>
+          <tbody id="attBody">
+            <tr><td colspan="2">
+              <div class="empty"><p>Select a date and press Load</p></div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────── TRAINERS ──────────────── -->
+  <div id="page-trainers" class="page">
+    <div style="background:#1A8C8C;border-radius:18px;padding:16px;margin-bottom:12px;
+      display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:1rem;font-weight:800;color:#fff">💪 Trainers</div>
+        <div style="font-size:.72rem;color:rgba(255,255,255,.65);margin-top:2px">Manage your training staff</div>
+      </div>
+      <button onclick="openModal('addTrainerModal')"
+        style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);
+          border-radius:12px;padding:8px 16px;font-family:inherit;font-size:.82rem;
+          font-weight:800;cursor:pointer;min-height:40px">+ Add Trainer</button>
+    </div>
+    <div id="trainersListWrap">
+      <div class="empty"><div class="ei">⏳</div><p>Loading trainers…</p></div>
+    </div>
+  </div>
+
+  <!-- ──────────────── PLANS ──────────────── -->
+  <div id="page-plans" class="page">
+    <div style="background:linear-gradient(135deg,#1A8C8C,#27AE60);border-radius:18px;
+      padding:16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:1rem;font-weight:800;color:#fff">💎 Membership Plans</div>
+        <div style="font-size:.72rem;color:rgba(255,255,255,.65);margin-top:2px">Synced across all devices</div>
+      </div>
+      <button onclick="openModal('addPlanModal')"
+        style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);
+          border-radius:12px;padding:8px 16px;font-family:inherit;font-size:.82rem;
+          font-weight:800;cursor:pointer;min-height:40px">+ Add Plan</button>
+    </div>
+    <div id="plansListWrap">
+      <div class="empty"><div class="ei">⏳</div><p>Loading plans…</p></div>
+    </div>
+  </div>
+
+  <!-- ──────────────── DISCOUNTS ──────────────── -->
+  <div id="page-discounts" class="page">
+    <div style="background:linear-gradient(135deg,#F39C12,#E74C3C);border-radius:18px;
+      padding:16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:1rem;font-weight:800;color:#fff">🏷️ Discounts & Offers</div>
+        <div style="font-size:.72rem;color:rgba(255,255,255,.7);margin-top:2px">Active discount campaigns</div>
+      </div>
+      <button onclick="openModal('addDiscountModal')"
+        style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3);
+          border-radius:12px;padding:8px 16px;font-family:inherit;font-size:.82rem;
+          font-weight:800;cursor:pointer;min-height:40px">+ Add Offer</button>
+    </div>
+    <div id="discTable"></div>
+  </div>
+
+  <!-- ──────────────── PAYMENTS ──────────────── -->
+  <div id="page-payments" class="page">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Due Payments</span></div>
+      <div id="payList">
+        <div class="empty"><div class="ei">⏳</div><p>Loading…</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────── PT BLOCK ──────────────── -->
+  <div id="page-ptblock" class="page">
+    <div style="background:linear-gradient(135deg,#1A8C8C,#156F6F);border-radius:18px;padding:16px;margin-bottom:12px;
+      display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:1rem;font-weight:800;color:#fff">🏋️ Personal Training</div>
+        <div style="font-size:.72rem;color:rgba(255,255,255,.65);margin-top:2px">Members grouped by trainer</div>
+      </div>
+    </div>
+    <div id="ptBlockWrap">
+      <div class="empty"><div class="ei">⏳</div><p>Loading…</p></div>
+    </div>
+  </div>
+
+  <div id="page-revenue" class="page">
+    <div style="display:flex;align-items:center;gap:8px;background:#fff;border-radius:14px;padding:10px 14px;margin-bottom:10px;border:1px solid #E0ECEC;box-shadow:0 2px 8px rgba(0,0,0,.04)">
+      <span style="font-size:1.1rem">🔍</span>
+      <input id="revenueSearch" type="text" placeholder="Search by member name or ID..." oninput="filterRevenue()"
+        style="flex:1;border:none;outline:none;font-family:inherit;font-size:.88rem;color:#1A2E2E;background:transparent">
+      <button onclick="document.getElementById('revenueSearch').value='';filterRevenue()" style="border:none;background:none;cursor:pointer;color:#8AABAB;font-size:.8rem;font-weight:700">Clear</button>
+    </div>
+    <div style="background:#fff;border-radius:14px;padding:12px 14px;margin-bottom:10px;border:1px solid #E0ECEC;box-shadow:0 2px 8px rgba(0,0,0,.04)">
+      <div style="font-size:.65rem;font-weight:800;color:#8AABAB;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📅 Filter by payment date</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="flex:1;min-width:120px">
+          <label style="font-size:.62rem;font-weight:700;color:#4A6464;display:block;margin-bottom:3px">From</label>
+          <input id="revenueFromDate" type="date" style="width:100%;padding:8px 10px;border:2px solid #E0ECEC;border-radius:10px;font-family:inherit;font-size:.8rem;color:#1A2E2E">
+        </div>
+        <div style="flex:1;min-width:120px">
+          <label style="font-size:.62rem;font-weight:700;color:#4A6464;display:block;margin-bottom:3px">To</label>
+          <input id="revenueToDate" type="date" style="width:100%;padding:8px 10px;border:2px solid #E0ECEC;border-radius:10px;font-family:inherit;font-size:.8rem;color:#1A2E2E">
+        </div>
+        <button onclick="applyRevenueDateFilter()" style="padding:9px 16px;border:none;border-radius:10px;background:#1A8C8C;color:#fff;font-weight:800;font-size:.78rem;cursor:pointer;margin-top:16px">Apply</button>
+        <button onclick="clearRevenueDateFilter()" style="padding:9px 16px;border:1px solid #E0ECEC;border-radius:10px;background:#F0F5F5;color:#4A6464;font-weight:800;font-size:.78rem;cursor:pointer;margin-top:16px">Clear</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">📈 Revenue Dashboard</span></div>
+      <div style="padding:16px">
+        <div id="revenueDetailed"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ──────────────── SETTINGS ──────────────── -->
+  <div id="page-settings" class="page">
+    <div class="card">
+      <h3 style="font-size:.95rem;font-weight:800;color:var(--tx);margin-bottom:.75rem;
+                 display:flex;align-items:center;gap:7px;">
+        <span>💳</span> UPI Payment Settings
+      </h3>
+      <p class="sync-note" style="margin-bottom:.9rem">🔄 Synced across all your devices.</p>
+      <div class="form-group">
+        <label>Your UPI ID</label>
+        <input type="text" id="sUpiId" placeholder="e.g. yourname@upi">
+      </div>
+      <div class="form-group">
+        <label>Display Name (on QR)</label>
+        <input type="text" id="sUpiName" placeholder="e.g. My Gym">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="saveSettings()">Save UPI Settings</button>
+    </div>
+
+    <div class="card">
+      <h3 style="font-size:.95rem;font-weight:800;color:var(--tx);margin-bottom:.75rem;
+                 display:flex;align-items:center;gap:7px;">
+        <span>🎟️</span> Default Fees
+      </h3>
+      <div class="form-group">
+        <label>Default Admission Fee (₹)</label>
+        <input type="number" id="sAdmFee" placeholder="e.g. 500" min="0">
+      </div>
+      <div class="form-group">
+        <label>Default PT Fee / month (₹)</label>
+        <input type="number" id="sPtFee" placeholder="e.g. 2000" min="0">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="saveSettings()">Save Fee Settings</button>
+    </div>
+  </div>
+
+
+  <!-- ======== SUPERADMIN PAGE ======== -->
+  <div id="page-superadmin" class="page">
+    <div style="background:linear-gradient(135deg,#1A2E2E,#2D4E4E);border-radius:18px;padding:16px;margin-bottom:14px">
+      <div style="font-size:1.1rem;font-weight:800;color:#fff">🏆 GymPro Control Panel</div>
+      <div style="font-size:.72rem;color:rgba(255,255,255,.5);margin-top:2px" id="saEmailLabel"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+      <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;border:1px solid #E0ECEC">
+        <div style="font-size:1.5rem;font-weight:800;color:#E74C3C;line-height:1" id="saPending">-</div>
+        <div style="font-size:.56rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Pending</div>
+      </div>
+      <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;border:1px solid #E0ECEC">
+        <div style="font-size:1.5rem;font-weight:800;color:#D97706;line-height:1" id="saPendingGymsCount">-</div>
+        <div style="font-size:.56rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Gym Requests</div>
+      </div>
+      <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;border:1px solid #E0ECEC">
+        <div style="font-size:1.5rem;font-weight:800;color:#27AE60;line-height:1" id="saActiveCount">-</div>
+        <div style="font-size:.56rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Active Gyms</div>
+      </div>
+      <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;border:1px solid #E0ECEC">
+        <div style="font-size:1.5rem;font-weight:800;color:#1A8C8C;line-height:1" id="saTotal">-</div>
+        <div style="font-size:.56rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Total Gyms</div>
+      </div>
+    </div>
+    <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
+      <div style="padding:12px 16px;background:#FEF9E7;border-bottom:1.5px solid #FDE68A;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
+        <span>⏳ Pending Admin Approvals <span id="saPendingBadge" style="background:#E74C3C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
+        <button onclick="loadSuperAdminData()" style="background:#F0F5F5;border:1px solid #E0ECEC;border-radius:8px;padding:5px 11px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit">🔄</button>
+      </div>
+      <div id="saPendingList"><div class="empty"><div class="ei">✅</div><p>Loading...</p></div></div>
+    </div>
+    <!-- Manage Gym: additional-gym requests from existing admins, awaiting superadmin approval -->
+    <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
+      <div style="padding:12px 16px;background:#FEF3E2;border-bottom:1.5px solid #FCD9A8;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
+        <span>🏢 Manage Gym — Pending Gym Approvals <span id="saPendingGymsBadge" style="background:#D97706;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
+      </div>
+      <div id="saPendingGymsList"><div class="empty"><div class="ei">✅</div><p>Loading...</p></div></div>
+    </div>
+    <div style="background:#fff;border-radius:18px;overflow:hidden;border:1px solid #E0ECEC">
+      <div style="padding:12px 16px;background:#F8FFFE;border-bottom:1.5px solid #E0ECEC;font-weight:800;font-size:.9rem">
+        🏋️ All Gyms <span id="saGymsBadge" style="background:#1A8C8C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span>
+      </div>
+      <div id="saGymsList"><div class="empty"><p>Loading...</p></div></div>
+    </div>
+    <div id="saRejectModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;align-items:center;justify-content:center;padding:16px">
+      <div style="background:#fff;border-radius:18px;padding:20px;width:100%;max-width:380px">
+        <div style="font-size:1rem;font-weight:800;margin-bottom:10px;color:#1A2E2E" id="saRejectModalTitle">❌ Reject Registration</div>
+        <textarea id="saRejectReason" placeholder="Reason..." style="width:100%;padding:10px;border:2px solid #E0ECEC;border-radius:10px;font-family:inherit;font-size:.88rem;min-height:60px;resize:none"></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button onclick="document.getElementById('saRejectModal').style.display='none'" style="flex:1;padding:10px;border:1px solid #E0ECEC;border-radius:10px;background:#F0F5F5;font-family:inherit;font-weight:700;cursor:pointer">Cancel</button>
+          <button onclick="confirmSaReject()" style="flex:1;padding:10px;border:none;border-radius:10px;background:#E74C3C;color:#fff;font-family:inherit;font-weight:700;cursor:pointer">Reject</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ======== GYM ADMIN PAGE ======== -->
+  <div id="page-gymadmin" class="page">
+    <div style="background:linear-gradient(135deg,#1A8C8C,#156F6F);border-radius:18px;padding:16px;margin-bottom:14px">
+      <div style="font-size:1.05rem;font-weight:800;color:#fff;margin-bottom:2px">🏋️ Gym Admin Panel</div>
+      <div style="font-size:.72rem;color:rgba(255,255,255,.65)" id="gaAdminLabel"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div style="background:#fff;border-radius:14px;padding:14px;text-align:center;border:1px solid #E0ECEC">
+        <div style="font-size:1.6rem;font-weight:800;color:#E74C3C" id="gaPendingCount">-</div>
+        <div style="font-size:.6rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Pending Staff</div>
+      </div>
+      <div style="background:#fff;border-radius:14px;padding:14px;text-align:center;border:1px solid #E0ECEC">
+        <div style="font-size:1.6rem;font-weight:800;color:#27AE60" id="gaActiveCount">-</div>
+        <div style="font-size:.6rem;color:#8AABAB;font-weight:700;text-transform:uppercase;margin-top:4px">Active Staff</div>
+      </div>
+    </div>
+
+    <!-- Pending Staff Approvals -->
+    <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
+      <div style="padding:12px 16px;background:#FEF9E7;border-bottom:1.5px solid #FDE68A;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
+        <span>⏳ Staff Requests <span id="gaStaffBadge" style="background:#E74C3C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
+        <button onclick="loadGymAdminData()" style="background:#F0F5F5;border:1px solid #E0ECEC;border-radius:8px;padding:5px 11px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit">🔄</button>
+      </div>
+      <div id="gaPendingList"><div class="empty"><div class="ei">✅</div><p>No pending requests</p></div></div>
+    </div>
+
+    <!-- Pending Staff Password Resets -->
+    <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
+      <div style="padding:12px 16px;background:#FEECEB;border-bottom:1.5px solid #F5C6C0;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:space-between">
+        <span>🔑 Password Reset Requests <span id="gaResetBadge" style="background:#E74C3C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></span>
+      </div>
+      <div id="gaResetList"><div class="empty"><div class="ei">✅</div><p>No pending requests</p></div></div>
+    </div>
+
+    <!-- Create Staff manually -->
+    <div style="background:#fff;border-radius:18px;margin-bottom:14px;overflow:hidden;border:1px solid #E0ECEC">
+      <div style="padding:12px 16px;background:#F8FFFE;border-bottom:1.5px solid #E0ECEC;font-weight:800;font-size:.9rem">➕ Add Staff Manually</div>
+      <div style="padding:14px 16px">
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:.68rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Full Name</label>
+          <input id="gaSName" type="text" placeholder="Staff member name" style="width:100%;padding:11px 13px;border:2px solid #E0ECEC;border-radius:11px;font-family:inherit;font-size:.9rem;background:#F8FFFE">
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:.68rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Email</label>
+          <input id="gaSEmail" type="email" placeholder="staff@email.com" style="width:100%;padding:11px 13px;border:2px solid #E0ECEC;border-radius:11px;font-family:inherit;font-size:.9rem;background:#F8FFFE">
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="display:block;font-size:.68rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Password</label>
+          <input id="gaSPass" type="text" placeholder="Min 6 characters" style="width:100%;padding:11px 13px;border:2px solid #E0ECEC;border-radius:11px;font-family:inherit;font-size:.9rem;background:#F8FFFE">
+        </div>
+        <div style="background:#F8FFFE;border:1px solid #E0ECEC;border-radius:12px;padding:12px;margin-bottom:12px">
+          <div style="font-size:.68rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">🔒 Permissions</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#fff;border:1px solid #E0ECEC;border-radius:9px;cursor:pointer;font-size:.78rem;font-weight:600">
+              <input type="checkbox" id="gp_members" checked style="accent-color:#1A8C8C;width:15px;height:15px"> 👥 Members</label>
+            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#fff;border:1px solid #E0ECEC;border-radius:9px;cursor:pointer;font-size:.78rem;font-weight:600">
+              <input type="checkbox" id="gp_attendance" checked style="accent-color:#1A8C8C;width:15px;height:15px"> 📅 Attendance</label>
+            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#fff;border:1px solid #E0ECEC;border-radius:9px;cursor:pointer;font-size:.78rem;font-weight:600">
+              <input type="checkbox" id="gp_payments" checked style="accent-color:#1A8C8C;width:15px;height:15px"> 💳 Payments</label>
+            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#fff;border:1px solid #E0ECEC;border-radius:9px;cursor:pointer;font-size:.78rem;font-weight:600">
+              <input type="checkbox" id="gp_trainers" checked style="accent-color:#1A8C8C;width:15px;height:15px"> 💪 Trainers</label>
+            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#fff;border:1px solid #E0ECEC;border-radius:9px;cursor:pointer;font-size:.78rem;font-weight:600">
+              <input type="checkbox" id="gp_revenue" style="accent-color:#1A8C8C;width:15px;height:15px"> 📈 Revenue</label>
+            <label style="display:flex;align-items:center;gap:7px;padding:7px 10px;background:#fff;border:1px solid #FECDD5;border-radius:9px;cursor:pointer;font-size:.78rem;font-weight:600;color:#E74C3C">
+              <input type="checkbox" id="gp_delete" style="accent-color:#E74C3C;width:15px;height:15px"> 🗑️ Delete</label>
+          </div>
+        </div>
+        <button onclick="gaCreateStaff()" style="width:100%;padding:13px;background:#1A8C8C;color:#fff;border:none;border-radius:12px;font-family:inherit;font-size:.92rem;font-weight:800;cursor:pointer">➕ Create Staff Account</button>
+      </div>
+    </div>
+
+    <!-- Active Staff List -->
+    <div style="background:#fff;border-radius:18px;overflow:hidden;border:1px solid #E0ECEC">
+      <div style="padding:12px 16px;background:#F8FFFE;border-bottom:1.5px solid #E0ECEC;font-weight:800;font-size:.9rem">👥 Active Staff <span id="gaStaffCount" style="background:#1A8C8C;color:#fff;border-radius:20px;padding:2px 9px;font-size:.68rem;margin-left:5px">0</span></div>
+      <div id="gaStaffList"><div class="empty"><div class="ei">⏳</div><p>Loading...</p></div></div>
+    </div>
+  </div>
+
+
+</main>
+
+<!-- ════════════ EDIT TRAINER MODAL ════════════ -->
+<div class="modal" id="editTrainerModal">
+  <div class="mbox" style="max-width:420px">
+    <div class="mhdr">
+      <span class="mtitle">✏️ Edit Trainer</span>
+      <button class="mclose" onclick="closeModal('editTrainerModal')">✕</button>
+    </div>
+    <input type="hidden" id="etId">
+    <div class="form-group">
+      <label>Full Name *</label>
+      <input type="text" id="etName" placeholder="Trainer name" autocomplete="name">
+    </div>
+    <div class="form-group">
+      <label>Phone * (10 digits)</label>
+      <input type="tel" id="etPhone" placeholder="9876543210" maxlength="10" inputmode="numeric">
+    </div>
+    <div class="form-group">
+      <label>Specialty *</label>
+      <input type="text" id="etSpecialty" placeholder="e.g. Yoga, HIIT">
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select id="etStatus">
+        <option value="Active">Active</option>
+        <option value="Inactive">Inactive</option>
+      </select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:9px;margin-top:1.1rem">
+      <button class="btn btn-primary btn-full" onclick="saveEditTrainer()" style="min-height:50px;font-size:.96rem">Save Changes</button>
+      <button class="btn btn-ghost btn-full" onclick="closeModal('editTrainerModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ MEMBER ATTENDANCE MODAL ════════════ -->
+<div class="modal" id="memberAttModal">
+  <div class="mbox" style="max-height:92vh">
+    <div class="mhdr">
+      <div>
+        <div class="mtitle" id="memberAttTitle">Attendance</div>
+        <div style="font-size:.72rem;color:#8AABAB;font-weight:600;margin-top:2px" id="memberAttSubtitle">Records & Analysis</div>
+      </div>
+      <button class="mclose" onclick="closeModal('memberAttModal')">✕</button>
+    </div>
+    <div id="memberAttCal"></div>
+    <div id="memberAttStat"></div>
+    <div style="margin-top:14px">
+      <button class="btn btn-primary btn-full" style="min-height:48px" onclick="closeModal('memberAttModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ ADD MEMBER MODAL ═══════════════════ -->
+<div class="modal" id="addMemberModal">
+  <div class="mbox">
+    <div class="mhdr">
+      <span class="mtitle">Add New Member</span>
+      <button class="mclose" onclick="closeModal('addMemberModal')">✕</button>
+    </div>
+    <form id="addMemberForm">
+      <div class="form-sep" style="margin-top:0">📷 Profile Photo</div>
+      <div style="display:flex;gap:1rem;align-items:center;margin-bottom:12px">
+        <img id="photoPreview"
+          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231A8C8C22'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E"
+          style="width:100px;height:100px;border-radius:16px;object-fit:cover;flex-shrink:0;
+                 background:var(--teal-light);border:3px solid var(--border2);box-shadow:0 4px 14px rgba(0,0,0,.1)">
+        <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
+          <button type="button" class="btn btn-ghost btn-sm" id="openCamBtn" style="border-radius:20px;">📷 Camera</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="uploadBtn" style="border-radius:20px;">📁 Upload</button>
+          <button type="button" class="btn btn-danger btn-sm" id="clearPhotoBtn" style="display:none;border-radius:20px;">🗑</button>
+        </div>
+        <input type="file" id="photoFile" accept="image/*" capture="environment" style="display:none">
+        <input type="hidden" id="photoData">
+      </div>
+
+      <div class="form-sep">👤 Basic Info</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input type="text" id="mName" required placeholder="Arjun Reddy">
+        </div>
+        <div class="form-group">
+          <label>Phone * (10 digits)</label>
+          <input type="tel" id="mPhone" required placeholder="9876543210" maxlength="10" inputmode="numeric">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="mEmail" placeholder="optional">
+        </div>
+        <div class="form-group">
+          <label>Age</label>
+          <input type="text" id="mAge" placeholder="e.g. 25" inputmode="numeric" autocomplete="off">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Gender *</label>
+          <select id="mGender" required>
+            <option value="">Select Gender</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-sep">💎 Membership Plan</div>
+      <div class="form-group">
+        <label>Plan *</label>
+        <select id="mPlan" required onchange="onPlanChange()"></select>
+      </div>
+
+      <div class="disc-box">
+        <h4>🏷️ Discount (Optional)</h4>
+        <div class="radio-row">
+          <label><input type="radio" name="dType" value="none" checked onchange="recalcPrice()"> None</label>
+          <label><input type="radio" name="dType" value="percentage" onchange="recalcPrice()"> % Off</label>
+          <label><input type="radio" name="dType" value="fixed" onchange="recalcPrice()"> Fixed ₹</label>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Discount Value</label>
+            <input type="text" id="dValue" inputmode="decimal" placeholder="e.g. 200"
+              onchange="recalcPrice()" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label>Reason</label>
+            <input type="text" id="dReason" placeholder="e.g. Festival offer">
+          </div>
+        </div>
+        <div class="price-sum">
+          <div class="pl"><span>Original</span><span id="origPrice">₹0</span></div>
+          <div class="pl"><span>Final Price</span><span id="finalPrice">₹0</span></div>
+        </div>
+      </div>
+
+      <div class="adm-box">
+        <h4>🎟️ Admission Fee (One-time)</h4>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Amount (₹)</label>
+            <input type="text" id="mAdmFee" inputmode="decimal" placeholder="e.g. 500">
+          </div>
+          <div class="form-group">
+            <label>Collect Admission Fee?</label>
+            <select id="mWaive">
+              <option value="yes">Yes — Collect</option>
+              <option value="no">No — Don't Collect</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-box">
+        <h4>💪 Personal Training</h4>
+        <div class="toggle-row">
+          <label class="toggle-sw">
+            <input type="checkbox" id="mPtEnabled" onchange="togglePT('mPtDetails')">
+            <span class="toggle-track"></span>
+          </label>
+          <span style="font-size:.88rem;font-weight:700">Enable PT</span>
+        </div>
+        <div id="mPtDetails" style="display:none">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>PT Fee / month (₹)</label>
+              <input type="text" id="mPtFee" inputmode="decimal" placeholder="e.g. 2000" onchange="recalcPrice()">
+            </div>
+            <div class="form-group">
+              <label>Trainer</label>
+              <select id="mPtTrainer"><option value="">Select Trainer</option></select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>PT Notes</label>
+            <input type="text" id="mPtNotes" placeholder="e.g. Weight loss, 5 days/week">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Start Date *</label>
+          <input type="date" id="mStart" required onchange="onPlanChange()">
+        </div>
+        <div class="form-group">
+          <label>Expiry Date *</label>
+          <input type="date" id="mExpiry" required>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>💳 Payment Date *</label>
+          <input type="date" id="mPaymentDate" required
+            style="width:100%;padding:11px 14px;background:#fff;border:1.5px solid #1A8C8C;
+                   border-radius:14px;font-family:inherit;font-size:.88rem;font-weight:600;
+                   color:#1A2E2E;-webkit-appearance:none;appearance:none;box-sizing:border-box">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Status</label>
+        <select id="mStatus">
+          <option value="Active">Active</option>
+          <option value="Trial">Trial</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+      </div>
+
+      <div class="form-sep">🆘 Emergency Contact</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="mEcName" placeholder="Contact name">
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="tel" id="mEcPhone" placeholder="Phone">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Relationship</label>
+          <input type="text" id="mEcRel" placeholder="e.g. Father">
+        </div>
+      </div>
+
+      <div class="form-sep">🏥 Health Info</div>
+      <div id="condContainer"></div>
+      <button type="button" class="btn btn-ghost btn-sm btn-full"
+        style="margin-bottom:10px;border-radius:12px;min-height:42px;"
+        onclick="addCondition('condContainer')">+ Add Health Condition</button>
+      <div class="form-group">
+        <label>Medical Notes</label>
+        <textarea id="mNotes" placeholder="Any notes…"></textarea>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:9px;margin-top:1.1rem">
+        <button type="submit" class="btn btn-primary btn-full">Add Member</button>
+        <button type="button" class="btn btn-ghost btn-full" onclick="closeModal('addMemberModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════ EDIT MEMBER MODAL ═══════════════════ -->
+<div class="modal" id="editMemberModal">
+  <div class="mbox">
+    <div class="mhdr">
+      <span class="mtitle">✏️ Edit Member</span>
+      <button class="mclose" onclick="closeModal('editMemberModal')">✕</button>
+    </div>
+    <form id="editMemberForm">
+      <input type="hidden" id="editMemberId">
+
+      <div class="form-sep" style="margin-top:0">📷 Profile Photo</div>
+      <div style="display:flex;gap:1rem;align-items:center;margin-bottom:12px">
+        <img id="ePhotoPreview"
+          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231A8C8C22'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E"
+          style="width:100px;height:100px;border-radius:16px;object-fit:cover;flex-shrink:0;
+                 background:#F0F5F5;border:3px solid #E0ECEC;box-shadow:0 4px 14px rgba(0,0,0,.1)">
+        <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
+          <button type="button" class="btn btn-ghost btn-sm" id="eOpenCamBtn" style="border-radius:20px;">📷 Camera</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="eUploadBtn" style="border-radius:20px;">📁 Upload</button>
+          <button type="button" class="btn btn-danger btn-sm" id="eClearPhotoBtn" style="display:none;border-radius:20px;">🗑 Remove</button>
+        </div>
+        <input type="file" id="ePhotoFile" accept="image/*" capture="environment" style="display:none">
+        <input type="hidden" id="ePhotoData">
+      </div>
+
+      <div class="form-sep">👤 Basic Info</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Full Name *</label><input type="text" id="eName" required></div>
+        <div class="form-group"><label>Phone * (10 digits)</label><input type="tel" id="ePhone" required maxlength="10" inputmode="numeric"></div>
+        <div class="form-group"><label>Email</label><input type="email" id="eEmail"></div>
+        <div class="form-group"><label>Age</label><input type="text" id="eAge" inputmode="numeric" autocomplete="off"></div>
+        <div class="form-group">
+          <label>Gender *</label>
+          <select id="eGender" required>
+            <option value="">Select</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="eStatus">
+            <option value="Active">Active</option>
+            <option value="Trial">Trial</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Expired">Expired</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-sep">💎 Membership</div>
+      <div class="form-group"><label>Plan *</label><select id="ePlan" required onchange="recalcEditPrice()"></select></div>
+      <div class="disc-box">
+        <h4>🏷️ Discount</h4>
+        <div class="radio-row">
+          <label><input type="radio" name="edType" value="none" checked onchange="recalcEditPrice()"> None</label>
+          <label><input type="radio" name="edType" value="percentage" onchange="recalcEditPrice()"> % Off</label>
+          <label><input type="radio" name="edType" value="fixed" onchange="recalcEditPrice()"> Fixed ₹</label>
+        </div>
+        <div class="form-grid">
+          <div class="form-group"><label>Value</label><input type="text" id="edValue" inputmode="decimal" placeholder="e.g. 200" onchange="recalcEditPrice()" autocomplete="off"></div>
+          <div class="form-group"><label>Reason</label><input type="text" id="edReason" placeholder="e.g. Festival offer"></div>
+        </div>
+        <div class="price-sum">
+          <div class="pl"><span>Original</span><span id="eOrigPrice">₹0</span></div>
+          <div class="pl"><span>Final Price</span><span id="eFinalPrice">₹0</span></div>
+        </div>
+      </div>
+
+      <div class="adm-box">
+        <h4>🎟️ Admission Fee</h4>
+        <div class="form-grid">
+          <div class="form-group"><label>Amount (₹)</label><input type="text" id="eAdmFee" inputmode="decimal"></div>
+          <div class="form-group"><label>Collect Admission Fee?</label>
+            <select id="eWaive"><option value="yes">Yes — Collect</option><option value="no">No — Don't Collect</option></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-box">
+        <h4>💪 Personal Training</h4>
+        <div class="toggle-row">
+          <label class="toggle-sw">
+            <input type="checkbox" id="ePtEnabled" onchange="togglePT('ePtDetails')">
+            <span class="toggle-track"></span>
+          </label>
+          <span style="font-size:.88rem;font-weight:700">Enable PT</span>
+        </div>
+        <div id="ePtDetails" style="display:none">
+          <div class="form-grid">
+            <div class="form-group"><label>PT Fee / month (₹)</label><input type="text" id="ePtFee" inputmode="decimal" onchange="recalcEditPrice()"></div>
+            <div class="form-group"><label>Trainer</label><select id="ePtTrainer"><option value="">Select Trainer</option></select></div>
+          </div>
+          <div class="form-group"><label>PT Notes</label><input type="text" id="ePtNotes"></div>
+        </div>
+      </div>
+
+      <div class="form-group"><label>Expiry Date *</label><input type="date" id="eExpiry" required></div>
+
+      <div class="form-sep">📊 Attendance Analytics</div>
+      <div id="eAttStats" style="margin-bottom:1.1rem"></div>
+
+      <div class="form-sep">🆘 Emergency Contact</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Name</label><input type="text" id="eEcName"></div>
+        <div class="form-group"><label>Phone</label><input type="tel" id="eEcPhone"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Relationship</label><input type="text" id="eEcRel"></div>
+      </div>
+
+      <div class="form-sep">🏥 Medical Notes</div>
+      <div class="form-group"><label>Notes</label><textarea id="eNotes" placeholder="Any notes…"></textarea></div>
+
+      <div style="display:flex;flex-direction:column;gap:9px;margin-top:1.1rem">
+        <button type="submit" class="btn btn-primary btn-full">Save Changes</button>
+        <button type="button" class="btn btn-ghost btn-full" onclick="closeModal('editMemberModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════ EDIT PLAN MODAL ═══════════════════ -->
+<div class="modal" id="editPlanModal">
+  <div class="mbox" style="max-width:360px">
+    <div class="mhdr">
+      <span class="mtitle">✏️ Edit Plan</span>
+      <button class="mclose" onclick="closeModal('editPlanModal')">✕</button>
+    </div>
+    <input type="hidden" id="editPlanOrigName">
+    <div class="form-group"><label>Plan Name *</label><input type="text" id="editPlanName"></div>
+    <div class="form-group"><label>Price (₹) *</label><input type="number" id="editPlanPrice" min="0"></div>
+    <div class="form-group"><label>Duration (months) *</label><input type="number" id="editPlanMonths" min="1"></div>
+    <div style="display:flex;flex-direction:column;gap:9px;margin-top:1.1rem">
+      <button class="btn btn-primary btn-full" onclick="saveEditPlan()">Save Plan</button>
+      <button class="btn btn-ghost btn-full" onclick="closeModal('editPlanModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ CAMERA MODAL ═══════════════════ -->
+<div class="modal" id="cameraModal">
+  <div class="mbox" style="max-width:400px;text-align:center">
+    <div class="mhdr">
+      <span class="mtitle">Take Photo</span>
+      <button type="button" class="mclose" id="closeCamBtn">✕</button>
+    </div>
+    <video id="camVideo" autoplay playsinline
+      style="width:100%;max-height:280px;background:#000;border-radius:14px;margin-bottom:1.2rem"></video>
+    <canvas id="camCanvas" style="display:none"></canvas>
+    <button type="button" class="btn btn-primary btn-full" id="captureBtn">📸 Capture Photo</button>
+  </div>
+</div>
+
+<!-- ═══════════════════ ADD TRAINER MODAL ═══════════════════ -->
+<div class="modal" id="addTrainerModal">
+  <div class="mbox" style="max-width:380px">
+    <div class="mhdr">
+      <span class="mtitle">Add Trainer</span>
+      <button class="mclose" onclick="closeModal('addTrainerModal')">✕</button>
+    </div>
+    <form id="addTrainerForm">
+      <div class="form-group"><label>Full Name *</label><input type="text" id="tName" required placeholder="Trainer name"></div>
+      <div class="form-group"><label>Phone * (10 digits)</label><input type="tel" id="tPhone" required placeholder="9876543210" maxlength="10"></div>
+      <div class="form-group"><label>Specialty *</label><input type="text" id="tSpecialty" required placeholder="e.g. Yoga, HIIT"></div>
+      <div class="form-group"><label>Status</label>
+        <select id="tStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option></select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:9px;margin-top:1.1rem">
+        <button type="submit" class="btn btn-primary btn-full">Add Trainer</button>
+        <button type="button" class="btn btn-ghost btn-full" onclick="closeModal('addTrainerModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════ ADD PLAN MODAL ═══════════════════ -->
+<div class="modal" id="addPlanModal">
+  <div class="mbox" style="max-width:360px">
+    <div class="mhdr">
+      <span class="mtitle">Add Plan</span>
+      <button class="mclose" onclick="closeModal('addPlanModal')">✕</button>
+    </div>
+    <div class="form-group"><label>Plan Name *</label><input type="text" id="newPlanName" placeholder="e.g. 1 Month Strength"></div>
+    <div class="form-group"><label>Price (₹) *</label><input type="number" id="newPlanPrice" min="0" placeholder="e.g. 1000"></div>
+    <div class="form-group"><label>Duration (months) *</label><input type="number" id="newPlanMonths" min="1" placeholder="e.g. 1"></div>
+    <div style="display:flex;flex-direction:column;gap:9px;margin-top:1.1rem">
+      <button class="btn btn-primary btn-full" onclick="addGymPlan()">Add Plan</button>
+      <button class="btn btn-ghost btn-full" onclick="closeModal('addPlanModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ ADD DISCOUNT MODAL ═══════════════════ -->
+<div class="modal" id="addDiscountModal">
+  <div class="mbox" style="max-width:390px">
+    <div class="mhdr">
+      <span class="mtitle">Add Discount</span>
+      <button class="mclose" onclick="closeModal('addDiscountModal')">✕</button>
+    </div>
+    <div class="form-group"><label>Discount Name *</label><input type="text" id="discName" placeholder="e.g. Festival Offer"></div>
+    <div class="form-group"><label>Applies To</label>
+      <select id="discApplies" onchange="toggleDiscPlan()">
+        <option value="all">All Plans</option>
+        <option value="specific">Specific Plan</option>
+      </select>
+    </div>
+    <div class="form-group" id="discPlanGroup" style="display:none">
+      <label>Select Plan</label>
+      <select id="discPlan"></select>
+    </div>
+    <div class="form-group"><label>Type</label>
+      <select id="discType">
+        <option value="percentage">Percentage (%)</option>
+        <option value="fixed">Fixed (₹)</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Value *</label><input type="number" id="discVal" min="0" placeholder="Enter value"></div>
+    <div class="form-group"><label>Valid Until</label><input type="date" id="discExpiry"></div>
+    <div style="display:flex;flex-direction:column;gap:9px;margin-top:1.1rem">
+      <button class="btn btn-primary btn-full" onclick="addDiscount()">Add Discount</button>
+      <button class="btn btn-ghost btn-full" onclick="closeModal('addDiscountModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAYMENT / RENEW MODAL ═══════════════════ -->
+<div class="modal" id="paymentModal">
+  <div class="mbox" style="max-width:390px">
+    <div class="mhdr">
+      <span class="mtitle">💳 Renew Plan</span>
+      <button class="mclose" onclick="cancelPayment()">✕</button>
+    </div>
+
+    <!-- Change Plan -->
+    <div class="form-group" id="payPlanRow">
+      <label>Change Plan</label>
+      <select id="payPlan" onchange="recalcPayment();updateRenewalDates()"></select>
+    </div>
+
+    <!-- Start / Expiry / Payment Date -->
+    <div id="payDatesRow" style="display:none;margin-bottom:.9rem">
+      <div class="form-grid">
+        <div class="form-group" style="margin-bottom:0">
+          <label>Start Date</label>
+          <input type="date" id="payStartDate" onchange="updateRenewalExpiry();recalcPayment()">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Expiry Date</label>
+          <input type="date" id="payExpiryDate"
+            style="width:100%;padding:11px 14px;background:#fff;border:1.5px solid #1A8C8C;
+                   border-radius:14px;font-family:inherit;font-size:.88rem;font-weight:600;
+                   color:#1A2E2E;-webkit-appearance:none;appearance:none;box-sizing:border-box">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;margin-bottom:0">
+          <label>💳 Payment Date *</label>
+          <input type="date" id="payRenewalPayDate" required
+            style="width:100%;padding:11px 14px;background:#fff;border:1.5px solid #1A8C8C;
+                   border-radius:14px;font-family:inherit;font-size:.88rem;font-weight:600;
+                   color:#1A2E2E;-webkit-appearance:none;appearance:none;box-sizing:border-box">
+        </div>
+      </div>
+    </div>
+
+    <!-- Renewal Discount -->
+    <div id="payDiscBox" style="background:#FEF9E7;border:1.5px solid #FBBF24;border-radius:14px;padding:12px 14px;margin-bottom:10px;display:none">
+      <div style="font-size:.72rem;font-weight:800;color:#D97706;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏷️ Discount (Optional)</div>
+      <div style="display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:5px;font-size:.82rem;font-weight:700;cursor:pointer">
+          <input type="radio" name="payDType" value="none" checked onchange="recalcPayment()"> None
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:.82rem;font-weight:700;cursor:pointer">
+          <input type="radio" name="payDType" value="percentage" onchange="recalcPayment()"> % Off
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:.82rem;font-weight:700;cursor:pointer">
+          <input type="radio" name="payDType" value="fixed" onchange="recalcPayment()"> Fixed ₹
+        </label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <label style="font-size:.72rem;font-weight:700;color:#4A6464;display:block;margin-bottom:4px">Value</label>
+          <input type="text" id="payDiscValue" inputmode="decimal" placeholder="e.g. 100"
+            onchange="recalcPayment()" oninput="recalcPayment()"
+            style="width:100%;padding:9px 12px;border:1.5px solid #D5D5DF;border-radius:12px;
+                   font-family:inherit;font-size:.88rem;background:#fff;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:.72rem;font-weight:700;color:#4A6464;display:block;margin-bottom:4px">Reason</label>
+          <input type="text" id="payDiscReason" placeholder="e.g. Loyalty"
+            style="width:100%;padding:9px 12px;border:1.5px solid #D5D5DF;border-radius:12px;
+                   font-family:inherit;font-size:.88rem;background:#fff;box-sizing:border-box">
+        </div>
+      </div>
+    </div>
+
+    <!-- Personal Training -->
+    <div class="pt-box" style="margin-bottom:10px">
+      <div class="toggle-row" style="margin-bottom:0">
+        <label class="toggle-sw">
+          <input type="checkbox" id="payPtEnabled" onchange="togglePT('payPtDetails');recalcPayment()">
+          <span class="toggle-track"></span>
+        </label>
+        <span style="font-size:.9rem;font-weight:700">Personal Training</span>
+      </div>
+      <div id="payPtDetails" style="display:none;margin-top:.85rem">
+        <div class="form-grid">
+          <div class="form-group" style="margin-bottom:0"><label>PT Fee (₹)</label><input type="number" id="payPtFee" onchange="recalcPayment()"></div>
+          <div class="form-group" style="margin-bottom:0"><label>Trainer</label><select id="payPtTrainer"></select></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div id="payInfo"></div>
+
+    <!-- Payment Method -->
+    <div style="margin-bottom:12px">
+      <div style="font-size:.7rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Payment Method *</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px" id="payMethodBtns">
+        <button type="button" onclick="selectPayMethod('upi')" id="pmUpi"
+          style="padding:10px 3px;border-radius:12px;border:2px solid #E0ECEC;background:#fff;font-family:inherit;font-size:.72rem;font-weight:800;cursor:pointer;transition:all .2s;color:#4A6464">
+          📱 UPI
+        </button>
+        <button type="button" onclick="selectPayMethod('cash')" id="pmCash"
+          style="padding:10px 3px;border-radius:12px;border:2px solid #E0ECEC;background:#fff;font-family:inherit;font-size:.72rem;font-weight:800;cursor:pointer;transition:all .2s;color:#4A6464">
+          💵 Cash
+        </button>
+        <button type="button" onclick="selectPayMethod('card')" id="pmCard"
+          style="padding:10px 3px;border-radius:12px;border:2px solid #E0ECEC;background:#fff;font-family:inherit;font-size:.72rem;font-weight:800;cursor:pointer;transition:all .2s;color:#4A6464">
+          💳 Card
+        </button>
+        <button type="button" onclick="selectPayMethod('split')" id="pmSplit"
+          style="padding:10px 3px;border-radius:12px;border:2px solid #E0ECEC;background:#fff;font-family:inherit;font-size:.72rem;font-weight:800;cursor:pointer;transition:all .2s;color:#4A6464">
+          🔀 Split
+        </button>
+      </div>
+    </div>
+
+    <!-- Split payment (UPI + Cash) amount entry -->
+    <div id="paySplitPanel" style="display:none;background:#F0F5F5;border:1px solid #E0ECEC;border-radius:12px;padding:12px;margin-bottom:12px">
+      <label style="font-size:.7rem;font-weight:800;color:#1A8C8C;display:block;margin-bottom:5px">📱 UPI Portion (rest is counted as Cash)</label>
+      <input type="number" id="splitUpiAmt" value="0" min="0" step="1" oninput="updateSplitDisplay()"
+        style="width:100%;padding:9px 10px;border:2px solid #E0ECEC;border-radius:10px;font-family:inherit;font-size:.9rem;font-weight:700">
+      <div id="splitDisplayRow" style="font-size:.75rem;font-weight:700;color:#4A6464;margin-top:6px"></div>
+    </div>
+
+    <div id="payUpiPanel" style="display:none">
+      <div class="qr-box">
+        <p style="font-size:.72rem;color:var(--tx3);margin-bottom:8px;font-weight:700;">SCAN TO PAY VIA UPI</p>
+        <img id="payQR" src="" alt="QR Code">
+        <span class="upi-txt" id="dispUpi">—</span>
+      </div>
+    </div>
+
+    <div id="payCashPanel" style="display:none">
+      <div style="background:#EDFBF3;border:1.5px solid #A7F3D0;border-radius:14px;padding:14px;text-align:center;margin-bottom:12px">
+        <div style="font-size:2rem;margin-bottom:6px">💵</div>
+        <div style="font-weight:800;font-size:.95rem;color:#1A6B3C;margin-bottom:4px">Collect Cash Payment</div>
+        <div style="font-size:.82rem;color:#27AE60;font-weight:600">Confirm once cash is received in hand</div>
+      </div>
+    </div>
+
+    <div id="payCardPanel" style="display:none">
+      <div style="background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:14px;padding:14px;text-align:center;margin-bottom:12px">
+        <div style="font-size:2rem;margin-bottom:6px">💳</div>
+        <div style="font-weight:800;font-size:.95rem;color:#1D4ED8;margin-bottom:4px">Card / Online Payment</div>
+        <div style="font-size:.82rem;color:#2563EB;font-weight:600">Confirm once card payment is processed</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:9px">
+      <button class="btn btn-success btn-full" id="confirmPayBtn" onclick="confirmPayment()" disabled
+        style="opacity:.5">Select a payment method above</button>
+      <button class="btn btn-ghost btn-full" onclick="cancelPayment()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manage Gym Modal -->
+<div class="modal" id="manageGymModal">
+  <div class="mbox" style="max-width:420px">
+    <div class="mhdr">
+      <span class="mtitle">🏢 Manage Gym</span>
+      <button class="mclose" onclick="closeModal('manageGymModal')">✕</button>
+    </div>
+    <p style="font-size:.8rem;color:#8AABAB;margin-bottom:14px">Switch between gyms you own, or add a new one. Each gym's members, attendance, and trainers stay completely separate.</p>
+    <div id="gymListContainer" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+      <div style="text-align:center;padding:20px;color:#8AABAB">Loading...</div>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="promptAddGym()">➕ Add New Gym</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="/script.js"></script>
+</body>
+</html>
