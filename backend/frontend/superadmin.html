@@ -41,9 +41,14 @@
     .btn-reject{background:#E74C3C;color:#fff}
     .btn-ghost{background:#F0F5F5;color:#4A6464;border:1px solid #E0ECEC}
     .btn-sm{padding:6px 12px;font-size:.72rem}
+    .btn-warn{background:#FEF9E7;color:#D97706;border:1px solid #FDE68A}
+    .btn-delete{background:#fff;color:#E74C3C;border:1.5px solid #FECDD5}
+    .btn-delete:hover{background:#FFF0F0}
 
     .status{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.65rem;font-weight:800}
     .s-pending{background:#FEF9E7;color:#D97706}
+    .s-active{background:#E8F8EF;color:#27AE60}
+    .s-inactive{background:#F3F4F6;color:#6B7280}
 
     .empty{text-align:center;padding:36px 20px;color:#8AABAB}
     .empty .ei{font-size:2.5rem;margin-bottom:8px}
@@ -108,6 +113,16 @@
     <div id="pendingResetsList"><div class="empty"><div class="ei">✨</div><p>Loading…</p></div></div>
   </div>
 
+  <!-- 4. All Gyms — was missing entirely from this page before; only the
+       three pending sections above existed here, so there was nowhere on
+       this page to see already-approved gyms or delete one. -->
+  <div class="section">
+    <div class="sec-head">
+      <div class="sec-head-left">🏋️ All Gyms <span class="badge-count" id="allGymsBadge">0</span></div>
+    </div>
+    <div id="allGymsList"><div class="empty"><div class="ei">✨</div><p>Loading…</p></div></div>
+  </div>
+
 </div>
 
 <div class="modal-bg" id="rejectModal">
@@ -144,97 +159,39 @@ function logout() {
   window.location.href = '/login.html';
 }
 
-function toast(msg, type='') {
+function toast(msg, type) {
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.className = `toast show ${type}`;
-  setTimeout(() => el.className = 'toast', 3000);
+  el.className = 'toast show ' + (type || '');
+  setTimeout(function() { el.className = 'toast'; }, 3000);
 }
 
 function esc(s) {
-  return String(s||'').replace(/[&<>"']/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(s || '').replace(/[&<>"']/g, function(c) {
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+  });
 }
 
 function fDate(d) {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+  return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function gymAv(name) {
-  const i = (name||'?').split(' ').map(x=>x[0]).join('').toUpperCase().slice(0,2);
-  const colors = ['#1A8C8C','#2980B9','#27AE60','#8E44AD','#E67E22','#E74C3C'];
-  const bg = colors[(name||'').charCodeAt(0) % colors.length];
-  return `<div class="gym-av" style="background:linear-gradient(135deg,${bg},${bg}CC)">${esc(i)}</div>`;
+  const i = (name || '?').split(' ').map(function(x) { return x[0]; }).join('').toUpperCase().slice(0, 2);
+  const colors = ['#1A8C8C', '#2980B9', '#27AE60', '#8E44AD', '#E67E22', '#E74C3C'];
+  const bg = colors[(name || '').charCodeAt(0) % colors.length];
+  return '<div class="gym-av" style="background:linear-gradient(135deg,' + bg + ',' + bg + 'CC)">' + esc(i) + '</div>';
 }
 
 async function loadAll() {
-  await Promise.all([ loadPending(), loadPendingGyms(), loadPendingResets() ]);
+  await Promise.all([ loadPending(), loadPendingGyms(), loadPendingResets(), loadAllGyms() ]);
 }
 
-async function loadPendingResets() {
-  try {
-    const res = await fetch(`${BASE}/auth/pending-password-resets`, { headers: hdrs() });
-    if (res.status === 401) { logout(); return; }
-    const list = await res.json();
-
-    document.getElementById('pendingResetsBadge').textContent = list.length;
-    const el = document.getElementById('pendingResetsList');
-    if (!list.length) {
-      el.innerHTML = '<div class="empty"><div class="ei">✅</div><p>No pending password resets</p></div>';
-      return;
-    }
-
-    el.innerHTML = list.map(u => `
-      <div class="gym-card">
-        <div class="gym-av-wrap">
-          ${gymAv(u.gymName || u.name)}
-          <div class="gym-info" style="flex:1;min-width:0">
-            <h3>${esc(u.gymName || u.name)}</h3>
-            <div class="gym-email">👤 ${esc(u.name)} &nbsp;|&nbsp; ✉️ ${esc(u.email)}</div>
-            <div class="reg-date">📅 Requested: ${fDate(u.resetRequestedAt)}</div>
-          </div>
-        </div>
-        <div class="btn-row">
-          <div class="limit-field" style="flex:1;min-width:160px">
-            <label>🔑 New pwd</label>
-            <input type="text" id="newpwd-${esc(u._id)}" placeholder="6+ characters" style="width:100%">
-          </div>
-          <button class="btn btn-approve" onclick="approvePasswordReset('${esc(u._id)}','${esc(u.name)}')">✅ Set & Approve</button>
-          <button class="btn btn-reject" onclick="rejectPasswordReset('${esc(u._id)}','${esc(u.name)}')">❌ Dismiss</button>
-        </div>
-      </div>`).join('');
-  } catch(e) {
-    document.getElementById('pendingResetsList').innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading</p></div>';
-  }
-}
-
-async function approvePasswordReset(userId, name) {
-  const pwdInput = document.getElementById(`newpwd-${userId}`);
-  const newPassword = pwdInput ? pwdInput.value.trim() : '';
-  if (!newPassword || newPassword.length < 6) { toast('Enter a password (6+ characters) first', 'error'); return; }
-  try {
-    const res = await fetch(`${BASE}/auth/approve-password-reset/${userId}`, {
-      method: 'POST', headers: hdrs(), body: JSON.stringify({ newPassword })
-    });
-    const data = await res.json();
-    if (res.ok) { toast(data.message || `Password reset for ${name}`, 'success'); loadPendingResets(); }
-    else toast(data.error || 'Failed', 'error');
-  } catch(e) { toast('Network error', 'error'); }
-}
-
-async function rejectPasswordReset(userId, name) {
-  try {
-    const res = await fetch(`${BASE}/auth/reject-password-reset/${userId}`, { method: 'POST', headers: hdrs() });
-    const data = await res.json();
-    if (res.ok) { toast(data.message || `Dismissed`, 'success'); loadPendingResets(); }
-    else toast(data.error || 'Failed', 'error');
-  } catch(e) { toast('Network error', 'error'); }
-}
-
+/* ── Pending admin (gym owner) approvals ─────────────────────────── */
 async function loadPending() {
   try {
-    const res = await fetch(`${BASE}/auth/pending-approvals`, { headers: hdrs() });
+    const res = await fetch(BASE + '/auth/pending-approvals', { headers: hdrs() });
     if (res.status === 401) { logout(); return; }
     const list = await res.json();
 
@@ -245,50 +202,54 @@ async function loadPending() {
       return;
     }
 
-    el.innerHTML = list.map(u => `
-      <div class="gym-card">
-        <div class="gym-av-wrap">
-          ${gymAv(u.gymName || u.name)}
-          <div class="gym-info" style="flex:1;min-width:0">
-            <h3>${esc(u.gymName || u.name)}'s Gym</h3>
-            <div class="gym-email">👤 ${esc(u.name)} &nbsp;|&nbsp; ✉️ ${esc(u.email)}</div>
-            <div class="reg-date">📅 Registered: ${fDate(u.createdAt)}</div>
-            <span class="status s-pending" style="margin-top:6px;display:inline-block">⏳ Awaiting Approval</span>
-          </div>
-        </div>
-        <div class="btn-row">
-          <div class="limit-field">
-            <label>👥 Limit</label>
-            <input type="number" id="limit-admin-${esc(u._id)}" placeholder="∞" min="0">
-          </div>
-          <button class="btn btn-approve" onclick="approveAdmin('${esc(u._id)}','${esc(u.gymName||u.name)}')">✅ Approve</button>
-          <button class="btn btn-reject"  onclick="openRejectModal('admin','${esc(u._id)}')">❌ Reject</button>
-        </div>
-      </div>`).join('');
-  } catch(e) {
+    el.innerHTML = list.map(function(u) {
+      return '<div class="gym-card">' +
+        '<div class="gym-av-wrap">' +
+          gymAv(u.gymName || u.name) +
+          '<div class="gym-info" style="flex:1;min-width:0">' +
+            '<h3>' + esc(u.gymName || u.name) + '\'s Gym</h3>' +
+            '<div class="gym-email">👤 ' + esc(u.name) + ' &nbsp;|&nbsp; ✉️ ' + esc(u.email) + '</div>' +
+            '<div class="reg-date">📅 Registered: ' + fDate(u.createdAt) + '</div>' +
+            '<span class="status s-pending" style="margin-top:6px;display:inline-block">⏳ Awaiting Approval</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="btn-row">' +
+          '<div class="limit-field">' +
+            '<label>👥 Limit</label>' +
+            '<input type="number" id="limit-admin-' + esc(String(u._id)) + '" placeholder="∞" min="0">' +
+          '</div>' +
+          '<button class="btn btn-approve" onclick="approveAdmin(\'' + esc(String(u._id)) + '\',\'' + esc(u.gymName || u.name) + '\')">✅ Approve</button>' +
+          '<button class="btn btn-reject" onclick="openRejectModal(\'admin\',\'' + esc(String(u._id)) + '\')">❌ Reject</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch (e) {
     document.getElementById('pendingList').innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading</p></div>';
   }
 }
 
 async function approveAdmin(userId, gymName) {
-  const limitInput = document.getElementById(`limit-admin-${userId}`);
-  const limitVal = limitInput && limitInput.value.trim() !== '' ? Number(limitInput.value) : null;
+  const limitInput = document.getElementById('limit-admin-' + userId);
+  const limitVal = (limitInput && limitInput.value.trim() !== '') ? Number(limitInput.value) : null;
   try {
-    const res = await fetch(`${BASE}/auth/approve/${userId}`, {
-      method:'POST', headers:hdrs(),
+    const res = await fetch(BASE + '/auth/approve/' + userId, {
+      method: 'POST', headers: hdrs(),
       body: JSON.stringify({ memberLimit: limitVal })
     });
     const data = await res.json();
     if (res.ok) {
-      toast(`✅ ${gymName} approved${limitVal ? ` — limit: ${limitVal} members` : ''}`, 'success');
-      loadPending();
-    } else toast(data.error || 'Approval failed', 'error');
-  } catch(e) { toast('Network error', 'error'); }
+      toast('✅ ' + gymName + ' approved' + (limitVal ? (' — limit: ' + limitVal + ' members') : ''), 'success');
+      loadAll();
+    } else {
+      toast(data.error || 'Approval failed', 'error');
+    }
+  } catch (e) { toast('Network error', 'error'); }
 }
 
+/* ── Pending additional-gym approvals ────────────────────────────── */
 async function loadPendingGyms() {
   try {
-    const res = await fetch(`${BASE}/admin/pending-gyms`, { headers: hdrs() });
+    const res = await fetch(BASE + '/admin/pending-gyms', { headers: hdrs() });
     if (res.status === 401) { logout(); return; }
     const list = await res.json();
 
@@ -299,50 +260,202 @@ async function loadPendingGyms() {
       return;
     }
 
-    el.innerHTML = list.map(g => `
-      <div class="gym-card">
-        <div class="gym-av-wrap">
-          ${gymAv(g.name)}
-          <div class="gym-info" style="flex:1;min-width:0">
-            <h3>${esc(g.name)}</h3>
-            <div class="gym-email">👤 Owner: ${esc(g.User?.name || '')} &nbsp;|&nbsp; ✉️ ${esc(g.User?.email || '')}</div>
-            <div class="gym-meta">Already owns: ${esc(g.User?.gymName || '')}</div>
-            <div class="reg-date">📅 Requested: ${fDate(g.createdAt)}</div>
-            <span class="status s-pending" style="margin-top:6px;display:inline-block">⏳ Awaiting Approval</span>
-          </div>
-        </div>
-        <div class="btn-row">
-          <div class="limit-field">
-            <label>👥 Limit</label>
-            <input type="number" id="limit-gym-${esc(String(g.id))}" placeholder="∞" min="0">
-          </div>
-          <button class="btn btn-approve" onclick="approveExtraGym('${esc(String(g.id))}','${esc(g.name)}')">✅ Approve</button>
-          <button class="btn btn-reject"  onclick="openRejectModal('gym','${esc(String(g.id))}')">❌ Reject</button>
-        </div>
-      </div>`).join('');
-  } catch(e) {
+    el.innerHTML = list.map(function(g) {
+      const ownerName = (g.User && g.User.name) || '';
+      const ownerEmail = (g.User && g.User.email) || '';
+      const ownerGym = (g.User && g.User.gymName) || '';
+      return '<div class="gym-card">' +
+        '<div class="gym-av-wrap">' +
+          gymAv(g.name) +
+          '<div class="gym-info" style="flex:1;min-width:0">' +
+            '<h3>' + esc(g.name) + '</h3>' +
+            '<div class="gym-email">👤 Owner: ' + esc(ownerName) + ' &nbsp;|&nbsp; ✉️ ' + esc(ownerEmail) + '</div>' +
+            '<div class="gym-meta">Already owns: ' + esc(ownerGym) + '</div>' +
+            '<div class="reg-date">📅 Requested: ' + fDate(g.createdAt) + '</div>' +
+            '<span class="status s-pending" style="margin-top:6px;display:inline-block">⏳ Awaiting Approval</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="btn-row">' +
+          '<div class="limit-field">' +
+            '<label>👥 Limit</label>' +
+            '<input type="number" id="limit-gym-' + esc(String(g.id)) + '" placeholder="∞" min="0">' +
+          '</div>' +
+          '<button class="btn btn-approve" onclick="approveExtraGym(\'' + esc(String(g.id)) + '\',\'' + esc(g.name) + '\')">✅ Approve</button>' +
+          '<button class="btn btn-reject" onclick="openRejectModal(\'gym\',\'' + esc(String(g.id)) + '\')">❌ Reject</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch (e) {
     document.getElementById('pendingGymsList').innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading</p></div>';
   }
 }
 
 async function approveExtraGym(gymId, name) {
-  const limitInput = document.getElementById(`limit-gym-${gymId}`);
-  const limitVal = limitInput && limitInput.value.trim() !== '' ? Number(limitInput.value) : null;
+  const limitInput = document.getElementById('limit-gym-' + gymId);
+  const limitVal = (limitInput && limitInput.value.trim() !== '') ? Number(limitInput.value) : null;
   try {
-    const res = await fetch(`${BASE}/admin/approve-gym/${gymId}`, {
+    const res = await fetch(BASE + '/admin/approve-gym/' + gymId, {
       method: 'POST', headers: hdrs(),
       body: JSON.stringify({ memberLimit: limitVal })
     });
     const data = await res.json();
     if (res.ok) {
-      toast(data.message || `${name} approved${limitVal ? ` — limit: ${limitVal} members` : ''}`, 'success');
-      loadPendingGyms();
-    } else toast(data.error || 'Failed to approve', 'error');
-  } catch(e) { toast('Network error', 'error'); }
+      toast(data.message || (name + ' approved' + (limitVal ? (' — limit: ' + limitVal + ' members') : '')), 'success');
+      loadAll();
+    } else {
+      toast(data.error || 'Failed to approve', 'error');
+    }
+  } catch (e) { toast('Network error', 'error'); }
 }
 
+/* ── Pending password resets ─────────────────────────────────────── */
+async function loadPendingResets() {
+  try {
+    const res = await fetch(BASE + '/auth/pending-password-resets', { headers: hdrs() });
+    if (res.status === 401) { logout(); return; }
+    const list = await res.json();
+
+    document.getElementById('pendingResetsBadge').textContent = list.length;
+    const el = document.getElementById('pendingResetsList');
+    if (!list.length) {
+      el.innerHTML = '<div class="empty"><div class="ei">✅</div><p>No pending password resets</p></div>';
+      return;
+    }
+
+    el.innerHTML = list.map(function(u) {
+      return '<div class="gym-card">' +
+        '<div class="gym-av-wrap">' +
+          gymAv(u.gymName || u.name) +
+          '<div class="gym-info" style="flex:1;min-width:0">' +
+            '<h3>' + esc(u.gymName || u.name) + '</h3>' +
+            '<div class="gym-email">👤 ' + esc(u.name) + ' &nbsp;|&nbsp; ✉️ ' + esc(u.email) + '</div>' +
+            '<div class="reg-date">📅 Requested: ' + fDate(u.resetRequestedAt) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="btn-row">' +
+          '<div class="limit-field" style="flex:1;min-width:160px">' +
+            '<label>🔑 New pwd</label>' +
+            '<input type="text" id="newpwd-' + esc(String(u._id)) + '" placeholder="6+ characters" style="width:100%">' +
+          '</div>' +
+          '<button class="btn btn-approve" onclick="approvePasswordReset(\'' + esc(String(u._id)) + '\',\'' + esc(u.name) + '\')">✅ Set & Approve</button>' +
+          '<button class="btn btn-reject" onclick="rejectPasswordReset(\'' + esc(String(u._id)) + '\',\'' + esc(u.name) + '\')">❌ Dismiss</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch (e) {
+    document.getElementById('pendingResetsList').innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading</p></div>';
+  }
+}
+
+async function approvePasswordReset(userId, name) {
+  const pwdInput = document.getElementById('newpwd-' + userId);
+  const newPassword = pwdInput ? pwdInput.value.trim() : '';
+  if (!newPassword || newPassword.length < 6) { toast('Enter a password (6+ characters) first', 'error'); return; }
+  try {
+    const res = await fetch(BASE + '/auth/approve-password-reset/' + userId, {
+      method: 'POST', headers: hdrs(), body: JSON.stringify({ newPassword: newPassword })
+    });
+    const data = await res.json();
+    if (res.ok) { toast(data.message || ('Password reset for ' + name), 'success'); loadPendingResets(); }
+    else { toast(data.error || 'Failed', 'error'); }
+  } catch (e) { toast('Network error', 'error'); }
+}
+
+async function rejectPasswordReset(userId, name) {
+  try {
+    const res = await fetch(BASE + '/auth/reject-password-reset/' + userId, { method: 'POST', headers: hdrs() });
+    const data = await res.json();
+    if (res.ok) { toast(data.message || 'Dismissed', 'success'); loadPendingResets(); }
+    else { toast(data.error || 'Failed', 'error'); }
+  } catch (e) { toast('Network error', 'error'); }
+}
+
+/* ── All Gyms — list, member-limit edit, suspend/activate, delete ───
+   NEW: this whole block was missing from superadmin.html. The backend
+   routes it calls already existed in admin.js (GET /admin/gyms,
+   PATCH /admin/gym/:id/member-limit, PATCH /admin/gym/:id/toggle,
+   DELETE /admin/gym/:id) — nothing on the server needed to change. */
+async function loadAllGyms() {
+  try {
+    const res = await fetch(BASE + '/admin/gyms', { headers: hdrs() });
+    if (res.status === 401) { logout(); return; }
+    const list = await res.json();
+
+    document.getElementById('allGymsBadge').textContent = list.length;
+    const el = document.getElementById('allGymsList');
+    if (!list.length) {
+      el.innerHTML = '<div class="empty"><div class="ei">🏋️</div><p>No approved gyms yet</p></div>';
+      return;
+    }
+
+    el.innerHTML = list.map(function(g) {
+      const statusBadge = g.isActive
+        ? '<span class="status s-active">✓ Active</span>'
+        : '<span class="status s-inactive">⏸ Suspended</span>';
+      const limitLabel = g.memberLimit ? (g.memberLimit + ' members') : 'Unlimited';
+      return '<div class="gym-card">' +
+        '<div class="gym-av-wrap">' +
+          gymAv(g.gymName || g.name) +
+          '<div class="gym-info" style="flex:1;min-width:0">' +
+            '<h3>' + esc(g.gymName || g.name) + '</h3>' +
+            '<div class="gym-email">👤 ' + esc(g.name) + ' &nbsp;|&nbsp; ✉️ ' + esc(g.email) + '</div>' +
+            '<div class="gym-meta">👥 Limit: ' + esc(limitLabel) + ' &nbsp;|&nbsp; ' + statusBadge + '</div>' +
+            '<div class="reg-date">📅 Since: ' + fDate(g.createdAt) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="btn-row">' +
+          '<div class="limit-field">' +
+            '<label>👥 Limit</label>' +
+            '<input type="number" id="alllimit-' + esc(String(g._id)) + '" placeholder="∞" min="0" value="' + (g.memberLimit || '') + '">' +
+          '</div>' +
+          '<button class="btn btn-ghost btn-sm" onclick="updateGymLimit(\'' + esc(String(g._id)) + '\',\'' + esc(g.gymName || g.name) + '\')">💾 Save Limit</button>' +
+          '<button class="btn ' + (g.isActive ? 'btn-warn' : 'btn-approve') + ' btn-sm" onclick="toggleGym(\'' + esc(String(g._id)) + '\',\'' + esc(g.gymName || g.name) + '\')">' +
+            (g.isActive ? '⏸ Suspend' : '▶ Activate') +
+          '</button>' +
+          '<button class="btn btn-delete btn-sm" onclick="deleteGym(\'' + esc(String(g._id)) + '\',\'' + esc(g.gymName || g.name) + '\')">🗑️ Delete</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch (e) {
+    document.getElementById('allGymsList').innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading</p></div>';
+  }
+}
+
+async function updateGymLimit(gymId, name) {
+  const input = document.getElementById('alllimit-' + gymId);
+  const limitVal = (input && input.value.trim() !== '') ? Number(input.value) : null;
+  try {
+    const res = await fetch(BASE + '/admin/gym/' + gymId + '/member-limit', {
+      method: 'PATCH', headers: hdrs(), body: JSON.stringify({ limit: limitVal })
+    });
+    const data = await res.json();
+    if (res.ok) { toast(data.message || (name + ' limit updated'), 'success'); loadAllGyms(); }
+    else { toast(data.error || 'Failed to update limit', 'error'); }
+  } catch (e) { toast('Network error', 'error'); }
+}
+
+async function toggleGym(gymId, name) {
+  try {
+    const res = await fetch(BASE + '/admin/gym/' + gymId + '/toggle', { method: 'PATCH', headers: hdrs() });
+    const data = await res.json();
+    if (res.ok) { toast(data.message || (name + ' status updated'), 'success'); loadAllGyms(); }
+    else { toast(data.error || 'Failed', 'error'); }
+  } catch (e) { toast('Network error', 'error'); }
+}
+
+async function deleteGym(gymId, name) {
+  if (!confirm('Permanently delete "' + name + '"? This removes the gym owner account and all of its staff accounts. This cannot be undone.')) return;
+  try {
+    const res = await fetch(BASE + '/admin/gym/' + gymId, { method: 'DELETE', headers: hdrs() });
+    const data = await res.json();
+    if (res.ok) { toast(data.message || (name + ' removed'), 'success'); loadAllGyms(); }
+    else { toast(data.error || 'Failed to delete', 'error'); }
+  } catch (e) { toast('Network error', 'error'); }
+}
+
+/* ── Reject modal (shared by admin + gym rejections) ─────────────── */
 function openRejectModal(kind, id) {
-  _rejectTarget = { kind, id };
+  _rejectTarget = { kind: kind, id: id };
   document.getElementById('rejectModalTitle').textContent =
     kind === 'admin' ? '❌ Reject Gym Owner Registration' : '❌ Reject Additional Gym Request';
   document.getElementById('rejectReason').value = '';
@@ -356,17 +469,19 @@ async function confirmReject() {
   if (!_rejectTarget) return;
   const reason = document.getElementById('rejectReason').value.trim() || 'Not approved.';
   const url = _rejectTarget.kind === 'admin'
-    ? `${BASE}/auth/reject/${_rejectTarget.id}`
-    : `${BASE}/admin/reject-gym/${_rejectTarget.id}`;
+    ? (BASE + '/auth/reject/' + _rejectTarget.id)
+    : (BASE + '/admin/reject-gym/' + _rejectTarget.id);
   try {
-    const res = await fetch(url, { method:'POST', headers:hdrs(), body:JSON.stringify({ reason }) });
+    const res = await fetch(url, { method: 'POST', headers: hdrs(), body: JSON.stringify({ reason: reason }) });
     const data = await res.json();
     if (res.ok) {
       toast('Request rejected', 'success');
       closeRejectModal();
       loadAll();
-    } else toast(data.error || 'Failed', 'error');
-  } catch(e) { toast('Network error', 'error'); }
+    } else {
+      toast(data.error || 'Failed', 'error');
+    }
+  } catch (e) { toast('Network error', 'error'); }
 }
 
 loadAll();
