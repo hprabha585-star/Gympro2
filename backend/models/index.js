@@ -7,14 +7,24 @@ const Subscription = require('./Subscription');
 const Gym = require('./Gym');
 
 // ── Associations ──────────────────────────────────────────
-User.hasMany(Member, { foreignKey: 'userId' });
-Member.belongsTo(User, { foreignKey: 'userId' });
+// IMPORTANT: constraints:false on the three below. "userId" on
+// Member/Trainer/Attendance is intentionally dual-purpose in this app's
+// multi-gym design — it's either a gym OWNER's User.id (their primary
+// gym) OR a Gym.id (an additional gym they added via Manage Gym). A real
+// database foreign key can only ever point at ONE of those tables, so it
+// incorrectly rejected every insert made while an additional gym was
+// active ("Cannot add or update a child row: a foreign key constraint
+// fails ... members_ibfk_1"). Every route already scopes strictly by
+// gymId in application code (see members.js, trainers.js, attendance.js),
+// so DB-level enforcement here was both wrong and redundant.
+User.hasMany(Member, { foreignKey: 'userId', constraints: false });
+Member.belongsTo(User, { foreignKey: 'userId', constraints: false });
 
-User.hasMany(Trainer, { foreignKey: 'userId' });
-Trainer.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(Trainer, { foreignKey: 'userId', constraints: false });
+Trainer.belongsTo(User, { foreignKey: 'userId', constraints: false });
 
-User.hasMany(Attendance, { foreignKey: 'userId' });
-Attendance.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(Attendance, { foreignKey: 'userId', constraints: false });
+Attendance.belongsTo(User, { foreignKey: 'userId', constraints: false });
 
 // alias 'member' used by routes to mimic Mongoose's .populate('memberId')
 Member.hasMany(Attendance, { foreignKey: 'memberId' });
