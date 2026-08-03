@@ -17,6 +17,8 @@ const Gym = require('./Gym');
 // fails ... members_ibfk_1"). Every route already scopes strictly by
 // gymId in application code (see members.js, trainers.js, attendance.js),
 // so DB-level enforcement here was both wrong and redundant.
+// (No changes needed here — this file is already correct; confirmed
+// working in the deploy logs: "dropped foreign key members_ibfk_1" etc.)
 User.hasMany(Member, { foreignKey: 'userId', constraints: false });
 Member.belongsTo(User, { foreignKey: 'userId', constraints: false });
 
@@ -27,6 +29,9 @@ User.hasMany(Attendance, { foreignKey: 'userId', constraints: false });
 Attendance.belongsTo(User, { foreignKey: 'userId', constraints: false });
 
 // alias 'member' used by routes to mimic Mongoose's .populate('memberId')
+// Kept as a real FK on purpose — memberId always points at exactly one
+// Member row, no dual-purpose ambiguity here, so DB enforcement is correct
+// and server.js's index cleanup now knows to leave its backing index alone.
 Member.hasMany(Attendance, { foreignKey: 'memberId' });
 Attendance.belongsTo(Member, { foreignKey: 'memberId', as: 'member' });
 
