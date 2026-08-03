@@ -37,114 +37,135 @@ app.get('*', (req, res) => res.sendFile(path.join(frontendPath, 'index.html')));
 
 const PORT = process.env.PORT || 5000;
 
+// ── Self-healing DB maintenance ──────────────────────────────────────────
+// IMPORTANT: these run in the BACKGROUND, after the server is already
+// listening (see start() below). Running them before app.listen() was the
+// direct cause of the "App did not call listen() within 3 seconds" hosting
+// error you were seeing (and the resulting restart loop): each step below
+// is a real network round trip to MySQL, and 3+3+6 sequential round trips
+// on every cold start easily blew past Hostinger's 3-second window before
+// listen() ever ran. That restart loop is also why gym-switching / gym
+// data felt slow — every switch could hit a cold, still-restarting
+// instance and pay this whole migration chain again before answering.
+
+// members/trainers/attendances.userId is intentionally dual-purpose — a
+// gym owner's User.id OR a Gym.id for an additional gym (see models/index.js).
+// Older deploys let Sequelize create a real FK to users.id, which then
+// rejected inserts made under an additional gym. Drop any leftover FK.
+async function dropUserForeignKeys(tableName) {
+  try {
+    const [fks] = await sequelize.query(`
+      SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${tableName}'
+        AND REFERENCED_TABLE_NAME = 'users' AND COLUMN_NAME = 'userId'
+    `);
+    for (const fk of fks) {
+      try {
+        await sequelize.query(`ALTER TABLE \`${tableName}\` DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+        console.log(`✅ ${tableName}: dropped foreign key ${fk.CONSTRAINT_NAME} (userId no longer FK-constrained to users)`);
+      } catch (e) {
+        console.warn(`   ⚠️ could not drop FK "${fk.CONSTRAINT_NAME}" on ${tableName}: ${e.message}`);
+      }
+    }
+  } catch (e) {
+    // Table doesn't exist yet on a fresh database — nothing to clean, that's fine
+  }
+}
+
+// Repeated `sync({ alter: true })` runs across many redeploys piled up
+// near-duplicate indexes on several tables — one hit MySQL's hard cap of
+// 64 indexes per table, which then made EVERY sync fail with "Too many
+// keys specified". This clears non-primary indexes before every sync.
+//
+// BUG FIX: this used to try to drop EVERY non-primary index unconditionally,
+// including indexes that back a real, still-valid foreign key (e.g.
+// attendances.memberId -> members.id, gyms.ownerId -> users.id,
+// subscriptions.userId -> users.id). MySQL refuses to drop an index a live
+// FK depends on, so every boot logged 3 "could not drop index" warnings for
+// indexes that were never supposed to be dropped in the first place. Now
+// it looks up which columns are still FK-backed and skips those indexes
+// entirely instead of attempting (and failing) to drop them.
+async function cleanupExcessIndexes(tableName) {
+  try {
+    const [indexes] = await sequelize.query(`SHOW INDEX FROM \`${tableName}\``);
+    if (!indexes.length) return;
+
+    const [fkRows] = await sequelize.query(`
+      SELECT DISTINCT COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${tableName}'
+        AND REFERENCED_TABLE_NAME IS NOT NULL
+    `);
+    const fkColumns = new Set(fkRows.map(r => r.COLUMN_NAME));
+
+    const indexColumns = {}; // indexName -> [columns]
+    for (const row of indexes) {
+      if (row.Key_name === 'PRIMARY') continue;
+      (indexColumns[row.Key_name] ||= []).push(row.Column_name);
+    }
+
+    const droppable = Object.keys(indexColumns).filter(
+      idxName => !indexColumns[idxName].some(col => fkColumns.has(col))
+    );
+    if (!droppable.length) return;
+
+    console.log(`🔧 ${tableName}: found ${droppable.length} non-primary index(es), clearing before sync...`);
+    for (const idx of droppable) {
+      try {
+        await sequelize.query(`ALTER TABLE \`${tableName}\` DROP INDEX \`${idx}\``);
+      } catch (e) {
+        console.warn(`   ⚠️ could not drop index "${idx}" on ${tableName}: ${e.message}`);
+      }
+    }
+    console.log(`✅ ${tableName}: index cleanup done`);
+  } catch (e) {
+    // Table doesn't exist yet on a fresh database — nothing to clean, that's fine
+  }
+}
+
+async function runMaintenance() {
+  // Independent per-table checks — run in parallel instead of one-at-a-time
+  // to cut total migration wall-clock time roughly 3-6x on every boot.
+  await Promise.all(['members', 'trainers', 'attendances'].map(dropUserForeignKeys));
+  await Promise.all(
+    ['members', 'trainers', 'attendances', 'users', 'gyms', 'subscriptions'].map(cleanupExcessIndexes)
+  );
+
+  try {
+    await sequelize.sync({ alter: true });
+  } catch (syncErr) {
+    console.warn('⚠️ First sync attempt failed:', syncErr.message, '— retrying after a second cleanup pass');
+    await Promise.all(
+      ['members', 'trainers', 'attendances', 'users', 'gyms', 'subscriptions'].map(cleanupExcessIndexes)
+    );
+    await sequelize.sync({ alter: true });
+  }
+
+  // `gyms.id` and `users.id` are independent auto-increment counters in
+  // separate tables. If they ever numerically collide, the app can't tell
+  // a user's own gym apart from an additional gym with the same id — push
+  // gyms.id far out of range so this can never happen.
+  try {
+    const [[row]] = await sequelize.query(
+      "SELECT AUTO_INCREMENT AS next FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'gyms'"
+    );
+    if (row && row.next < 1000000) {
+      await sequelize.query('ALTER TABLE gyms AUTO_INCREMENT = 1000000');
+      console.log('✅ gyms table id range pushed to 1,000,000+ to avoid collisions with user ids');
+    }
+  } catch (e) {
+    console.warn('⚠️ Could not verify/adjust gyms AUTO_INCREMENT:', e.message);
+  }
+
+  console.log('✅ Tables synced');
+}
+
 async function start() {
   try {
     await sequelize.authenticate();
     console.log('✅ MySQL Connected');
 
-    // SELF-HEALING: members/trainers/attendances.userId is intentionally
-    // dual-purpose — either a gym owner's User.id, or a Gym.id for an
-    // additional gym added via Manage Gym. An earlier version of the
-    // models let Sequelize create a real foreign key from this column to
-    // `users.id`, which correctly rejects the second case ("Cannot add or
-    // update a child row: a foreign key constraint fails ...
-    // members_ibfk_1"). The models no longer define that constraint, but
-    // MySQL doesn't retroactively remove one that already exists — drop
-    // it explicitly here. This is also why some index cleanup below
-    // previously logged "needed in a foreign key constraint" — dropping
-    // the FK first lets that cleanup fully succeed too.
-    async function dropUserForeignKeys(tableName) {
-      try {
-        const [fks] = await sequelize.query(`
-          SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
-          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${tableName}'
-            AND REFERENCED_TABLE_NAME = 'users' AND COLUMN_NAME = 'userId'
-        `);
-        for (const fk of fks) {
-          try {
-            await sequelize.query(`ALTER TABLE \`${tableName}\` DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
-            console.log(`✅ ${tableName}: dropped foreign key ${fk.CONSTRAINT_NAME} (userId no longer FK-constrained to users)`);
-          } catch (e) {
-            console.warn(`   ⚠️ could not drop FK "${fk.CONSTRAINT_NAME}" on ${tableName}: ${e.message}`);
-          }
-        }
-      } catch (e) {
-        // Table doesn't exist yet on a fresh database — nothing to clean, that's fine
-      }
-    }
-    for (const t of ['members', 'trainers', 'attendances']) {
-      await dropUserForeignKeys(t);
-    }
-
-    // SELF-HEALING: repeated `sync({ alter: true })` runs across many
-    // redeploys piled up near-duplicate indexes on several tables — one
-    // hit MySQL's hard cap of 64 indexes per table, which then made EVERY
-    // sync fail with "Too many keys specified". This runs UNCONDITIONALLY
-    // on every startup now (not just past a threshold) and covers every
-    // table in the app, so it can't miss the actual offending one again.
-    // Dropping and letting sync() immediately rebuild the (now stably
-    // named) indexes is safe — it never touches actual row data.
-    async function cleanupExcessIndexes(tableName) {
-      try {
-        const [indexes] = await sequelize.query(`SHOW INDEX FROM \`${tableName}\``);
-        const nonPrimary = [...new Set(indexes.filter(i => i.Key_name !== 'PRIMARY').map(i => i.Key_name))];
-        if (!nonPrimary.length) return;
-        console.log(`🔧 ${tableName}: found ${nonPrimary.length} non-primary index(es), clearing before sync...`);
-        for (const idx of nonPrimary) {
-          try {
-            await sequelize.query(`ALTER TABLE \`${tableName}\` DROP INDEX \`${idx}\``);
-          } catch (e) {
-            console.warn(`   ⚠️ could not drop index "${idx}" on ${tableName}: ${e.message}`);
-          }
-        }
-        console.log(`✅ ${tableName}: index cleanup done`);
-      } catch (e) {
-        // Table doesn't exist yet on a fresh database — nothing to clean, that's fine
-      }
-    }
-    for (const t of ['members', 'trainers', 'attendances', 'users', 'gyms', 'subscriptions']) {
-      await cleanupExcessIndexes(t);
-    }
-
-    // Creates tables if they don't exist yet. Safe to leave on Hostinger;
-    // it will NOT drop or overwrite existing tables/data.
-    // { alter: true } lets sync() add new columns to EXISTING tables too
-    // (plain sync() only creates missing tables — it silently skips new
-    // fields added to a model later, which caused the "Unknown column"
-    // 500 errors after pendingAmount was added). Safe for additive changes;
-    // it will not drop existing columns or data.
-    try {
-      await sequelize.sync({ alter: true });
-    } catch (syncErr) {
-      // Last-resort fallback: if sync STILL fails (e.g. index cleanup above
-      // missed something), clear every table's indexes unconditionally
-      // one more time and retry once before giving up.
-      console.warn('⚠️ First sync attempt failed:', syncErr.message, '— retrying after a second cleanup pass');
-      for (const t of ['members', 'trainers', 'attendances', 'users', 'gyms', 'subscriptions']) {
-        await cleanupExcessIndexes(t);
-      }
-      await sequelize.sync({ alter: true });
-    }
-
-    // SAFETY: `gyms.id` and `users.id` are independent auto-increment
-    // counters in separate tables. If they ever numerically collide (e.g.
-    // both currently at 2), the app can't tell a user's own gym apart from
-    // an additional gym with the same id — a real data-isolation risk, not
-    // just a display bug. Push gyms.id far out of range so this can never
-    // happen, without needing any manual SQL.
-    try {
-      const [[row]] = await sequelize.query(
-        "SELECT AUTO_INCREMENT AS next FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'gyms'"
-      );
-      if (row && row.next < 1000000) {
-        await sequelize.query('ALTER TABLE gyms AUTO_INCREMENT = 1000000');
-        console.log('✅ gyms table id range pushed to 1,000,000+ to avoid collisions with user ids');
-      }
-    } catch (e) {
-      console.warn('⚠️ Could not verify/adjust gyms AUTO_INCREMENT:', e.message);
-    }
-    console.log('✅ Tables synced');
-
+    // Start accepting traffic immediately — this is what satisfies
+    // Hostinger's "must call listen() within 3 seconds" health check.
     app.listen(PORT, () => {
       console.log(`\n🚀 GymPro Server on port ${PORT}`);
       console.log(`🔐 Auth:       /api/auth`);
@@ -153,6 +174,14 @@ async function start() {
       console.log(`📅 Attendance: /api/attendance`);
       console.log(`👑 Admin:      /api/admin`);
       console.log(`📱 QR:         /api/qr\n`);
+    });
+
+    // Schema self-healing runs in the background, after listen(). It's
+    // idempotent and safe to race with early requests — it only ever adds
+    // columns/tables or drops constraints/indexes that shouldn't exist;
+    // it never drops or overwrites row data.
+    runMaintenance().catch(err => {
+      console.error('⚠️ Background DB maintenance failed:', err.message);
     });
   } catch (err) {
     console.error('❌ MySQL connection error:', err.message);
