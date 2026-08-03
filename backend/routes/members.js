@@ -21,12 +21,17 @@ router.get('/', async (req, res) => {
 router.get('/stats', async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
-    const totalMembers = await Member.count({ where: { userId: gymId } });
     const today = new Date().toISOString().split('T')[0];
 
-    const activeToday = await Attendance.count({
-      where: { userId: gymId, date: today, status: 'Present' }
-    });
+    // Run the independent counts/queries in parallel instead of one after
+    // another — this endpoint used to pay 3 sequential DB round trips
+    // (totalMembers -> activeToday -> activeMembers) for numbers that
+    // don't depend on each other at all.
+    const [totalMembers, activeToday, activeMembers] = await Promise.all([
+      Member.count({ where: { userId: gymId } }),
+      Attendance.count({ where: { userId: gymId, date: today, status: 'Present' } }),
+      Member.findAll({ where: { userId: gymId, status: 'Active' }, attributes: ['plan'] })
+    ]);
 
     const revenueMap = {
       '1 Month Strength': 1000,
@@ -39,7 +44,6 @@ router.get('/stats', async (req, res) => {
       '1 Year Strength + Cardio': 14000
     };
 
-    const activeMembers = await Member.findAll({ where: { userId: gymId, status: 'Active' } });
     let estimatedRevenue = 0;
     activeMembers.forEach(m => { estimatedRevenue += revenueMap[m.plan] || 0; });
 
@@ -70,16 +74,25 @@ router.post('/', async (req, res) => {
     const photoErr = checkPhotoSize(memberData.photo);
     if (photoErr) return res.status(400).json({ error: photoErr });
 
-    // Enforce the member limit the superadmin set for this gym (if any).
+    // SPEED FIX: the gym-owner lookup (for the member-limit check) and the
+    // duplicate-phone check don't depend on each other at all, but used to
+    // run one after another — an extra full DB round trip on every single
+    // "Add Member" request. Run them in parallel instead.
     // gymId may belong to either the owner's own account (primary gym) or
     // a row in the Gym table (an additional gym) — check both, since only
     // checking User previously let additional gyms bypass their limit
     // entirely.
-    let memberLimit = null;
-    const gymOwner = await User.findByPk(gymId);
-    if (gymOwner) {
-      memberLimit = gymOwner.memberLimit;
-    } else {
+    const [gymOwner, existingMember] = await Promise.all([
+      User.findByPk(gymId),
+      Member.findOne({ where: { userId: gymId, phone: memberData.phone } })
+    ]);
+
+    if (existingMember) {
+      return res.status(400).json({ error: 'Member with this phone number already exists' });
+    }
+
+    let memberLimit = gymOwner ? gymOwner.memberLimit : null;
+    if (!gymOwner) {
       const gymRow = await Gym.findByPk(gymId);
       if (gymRow) memberLimit = gymRow.memberLimit;
     }
@@ -90,11 +103,6 @@ router.post('/', async (req, res) => {
           error: `Member limit reached (${memberLimit} members). Contact GymPro support to increase your limit.`
         });
       }
-    }
-
-    const existingMember = await Member.findOne({ where: { userId: gymId, phone: memberData.phone } });
-    if (existingMember) {
-      return res.status(400).json({ error: 'Member with this phone number already exists' });
     }
 
     const newMember = await Member.create({ ...memberData, userId: gymId });
@@ -124,16 +132,19 @@ router.put('/:id', async (req, res) => {
     const photoErr = checkPhotoSize(memberData.photo);
     if (photoErr) return res.status(400).json({ error: photoErr });
 
-    if (memberData.phone) {
-      const existingMember = await Member.findOne({
-        where: { userId: gymId, phone: memberData.phone, id: { [Op.ne]: req.params.id } }
-      });
-      if (existingMember) {
-        return res.status(400).json({ error: 'Another member with this phone number already exists' });
-      }
-    }
+    // SPEED FIX: same as above — the duplicate-phone check (when phone is
+    // being changed) and loading the member being edited don't depend on
+    // each other, so run them in parallel instead of sequentially.
+    const [existingMember, member] = await Promise.all([
+      memberData.phone
+        ? Member.findOne({ where: { userId: gymId, phone: memberData.phone, id: { [Op.ne]: req.params.id } } })
+        : Promise.resolve(null),
+      Member.findOne({ where: { id: req.params.id, userId: gymId } })
+    ]);
 
-    const member = await Member.findOne({ where: { id: req.params.id, userId: gymId } });
+    if (memberData.phone && existingMember) {
+      return res.status(400).json({ error: 'Another member with this phone number already exists' });
+    }
     if (!member) return res.status(404).json({ error: 'Member not found' });
 
     await member.update(memberData);
@@ -211,8 +222,12 @@ router.get('/attendance/stats/:date', async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
     const { date } = req.params;
-    const totalActive = await Member.count({ where: { userId: gymId, status: { [Op.in]: ['Active', 'Trial'] } } });
-    const presentCount = await Attendance.count({ where: { userId: gymId, date, status: 'Present' } });
+
+    // SPEED FIX: these two counts are independent — run in parallel.
+    const [totalActive, presentCount] = await Promise.all([
+      Member.count({ where: { userId: gymId, status: { [Op.in]: ['Active', 'Trial'] } } }),
+      Attendance.count({ where: { userId: gymId, date, status: 'Present' } })
+    ]);
     const attendancePercentage = totalActive > 0 ? Math.round((presentCount / totalActive) * 100) : 0;
 
     res.json({ totalActive, presentCount, attendancePercentage });
