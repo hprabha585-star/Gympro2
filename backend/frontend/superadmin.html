@@ -113,9 +113,7 @@
     <div id="pendingResetsList"><div class="empty"><div class="ei">✨</div><p>Loading…</p></div></div>
   </div>
 
-  <!-- 4. All Gyms — was missing entirely from this page before; only the
-       three pending sections above existed here, so there was nowhere on
-       this page to see already-approved gyms or delete one. -->
+  <!-- 4. All Gyms -->
   <div class="section">
     <div class="sec-head">
       <div class="sec-head-left">🏋️ All Gyms <span class="badge-count" id="allGymsBadge">0</span></div>
@@ -143,6 +141,11 @@
 const BASE = 'https://lightpink-mandrill-900007.hostingersite.com/api';
 const hdrs = () => ({ 'Content-Type':'application/json', 'Authorization':`Bearer ${localStorage.getItem('token')}` });
 let _rejectTarget = null;
+
+// Safe escaping for strings embedded inside inline JavaScript (onclick attributes)
+function jsEsc(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
 
 (function() {
   const u = JSON.parse(localStorage.getItem('user') || '{}');
@@ -218,8 +221,8 @@ async function loadPending() {
             '<label>👥 Limit</label>' +
             '<input type="number" id="limit-admin-' + esc(String(u._id)) + '" placeholder="∞" min="0">' +
           '</div>' +
-          '<button class="btn btn-approve" onclick="approveAdmin(\'' + esc(String(u._id)) + '\',\'' + esc(u.gymName || u.name) + '\')">✅ Approve</button>' +
-          '<button class="btn btn-reject" onclick="openRejectModal(\'admin\',\'' + esc(String(u._id)) + '\')">❌ Reject</button>' +
+          '<button class="btn btn-approve" onclick="approveAdmin(\'' + jsEsc(String(u._id)) + '\',\'' + jsEsc(u.gymName || u.name) + '\')">✅ Approve</button>' +
+          '<button class="btn btn-reject" onclick="openRejectModal(\'admin\',\'' + jsEsc(String(u._id)) + '\')">❌ Reject</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -280,8 +283,8 @@ async function loadPendingGyms() {
             '<label>👥 Limit</label>' +
             '<input type="number" id="limit-gym-' + esc(String(g.id)) + '" placeholder="∞" min="0">' +
           '</div>' +
-          '<button class="btn btn-approve" onclick="approveExtraGym(\'' + esc(String(g.id)) + '\',\'' + esc(g.name) + '\')">✅ Approve</button>' +
-          '<button class="btn btn-reject" onclick="openRejectModal(\'gym\',\'' + esc(String(g.id)) + '\')">❌ Reject</button>' +
+          '<button class="btn btn-approve" onclick="approveExtraGym(\'' + jsEsc(String(g.id)) + '\',\'' + jsEsc(g.name) + '\')">✅ Approve</button>' +
+          '<button class="btn btn-reject" onclick="openRejectModal(\'gym\',\'' + jsEsc(String(g.id)) + '\')">❌ Reject</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -337,8 +340,8 @@ async function loadPendingResets() {
             '<label>🔑 New pwd</label>' +
             '<input type="text" id="newpwd-' + esc(String(u._id)) + '" placeholder="6+ characters" style="width:100%">' +
           '</div>' +
-          '<button class="btn btn-approve" onclick="approvePasswordReset(\'' + esc(String(u._id)) + '\',\'' + esc(u.name) + '\')">✅ Set & Approve</button>' +
-          '<button class="btn btn-reject" onclick="rejectPasswordReset(\'' + esc(String(u._id)) + '\',\'' + esc(u.name) + '\')">❌ Dismiss</button>' +
+          '<button class="btn btn-approve" onclick="approvePasswordReset(\'' + jsEsc(String(u._id)) + '\',\'' + jsEsc(u.name) + '\')">✅ Set & Approve</button>' +
+          '<button class="btn btn-reject" onclick="rejectPasswordReset(\'' + jsEsc(String(u._id)) + '\',\'' + jsEsc(u.name) + '\')">❌ Dismiss</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -370,11 +373,7 @@ async function rejectPasswordReset(userId, name) {
   } catch (e) { toast('Network error', 'error'); }
 }
 
-/* ── All Gyms — list, member-limit edit, suspend/activate, delete ───
-   NEW: this whole block was missing from superadmin.html. The backend
-   routes it calls already existed in admin.js (GET /admin/gyms,
-   PATCH /admin/gym/:id/member-limit, PATCH /admin/gym/:id/toggle,
-   DELETE /admin/gym/:id) — nothing on the server needed to change. */
+/* ── All Gyms — list, member-limit edit, suspend/activate, delete ─── */
 async function loadAllGyms() {
   try {
     const res = await fetch(BASE + '/admin/gyms', { headers: hdrs() });
@@ -408,16 +407,16 @@ async function loadAllGyms() {
             '<label>👥 Limit</label>' +
             '<input type="number" id="alllimit-' + esc(String(g._id)) + '" placeholder="∞" min="0" value="' + (g.memberLimit || '') + '">' +
           '</div>' +
-          '<button class="btn btn-ghost btn-sm" onclick="updateGymLimit(\'' + esc(String(g._id)) + '\',\'' + esc(g.gymName || g.name) + '\')">💾 Save Limit</button>' +
-          '<button class="btn ' + (g.isActive ? 'btn-warn' : 'btn-approve') + ' btn-sm" onclick="toggleGym(\'' + esc(String(g._id)) + '\',\'' + esc(g.gymName || g.name) + '\')">' +
+          '<button class="btn btn-ghost btn-sm" onclick="updateGymLimit(\'' + jsEsc(String(g._id)) + '\',\'' + jsEsc(g.gymName || g.name) + '\')">💾 Save Limit</button>' +
+          '<button class="btn ' + (g.isActive ? 'btn-warn' : 'btn-approve') + ' btn-sm" onclick="toggleGym(\'' + jsEsc(String(g._id)) + '\',\'' + jsEsc(g.gymName || g.name) + '\')">' +
             (g.isActive ? '⏸ Suspend' : '▶ Activate') +
           '</button>' +
-          '<button class="btn btn-delete btn-sm" onclick="deleteGym(\'' + esc(String(g._id)) + '\',\'' + esc(g.gymName || g.name) + '\')">🗑️ Delete</button>' +
+          '<button class="btn btn-delete btn-sm" onclick="deleteGym(\'' + jsEsc(String(g._id)) + '\',\'' + jsEsc(g.gymName || g.name) + '\')">🗑️ Delete</button>' +
         '</div>' +
       '</div>';
     }).join('');
   } catch (e) {
-    document.getElementById('allGymsList').innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading</p></div>';
+    document.getElementById('allGymsList').innerHTML = '<div class="empty"><p style="color:#E74C3C">Error loading gyms</p></div>';
   }
 }
 
