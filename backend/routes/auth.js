@@ -308,16 +308,16 @@ router.get('/gym-profile', verifyToken, async (req, res) => {
   try {
     const activeId = req.user.gymId || req.user.userId;
     
-    // Check if looking at the primary gym (User table)
+    // Check if viewing primary gym
     if (Number(activeId) === Number(req.user.userId)) {
       const owner = await User.findByPk(activeId, { attributes: ['gymData', 'gymName', 'name'] });
-      if (!owner) return res.status(404).json({ error: 'Gym profile not found.' });
+      if (!owner) return res.status(404).json({ error: 'Primary gym profile not found.' });
       return res.json({ gymData: owner.gymData || '{}', gymName: owner.gymName || owner.name || '' });
     } 
-    // Otherwise, looking at an isolated additional gym (Gym table)
+    // Check if viewing an isolated additional gym
     else {
       const gym = await Gym.findByPk(activeId, { attributes: ['gymData', 'name'] });
-      if (!gym) return res.status(404).json({ error: 'Gym profile not found.' });
+      if (!gym) return res.status(404).json({ error: 'Additional gym profile not found.' });
       return res.json({ gymData: gym.gymData || '{}', gymName: gym.name || '' });
     }
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -330,14 +330,14 @@ router.patch('/profile', verifyToken, async (req, res) => {
     
     if (Number(activeId) === Number(req.user.userId)) {
       const owner = await User.findByPk(activeId);
-      if (!owner) return res.status(404).json({ error: 'Gym profile not found.' });
+      if (!owner) return res.status(404).json({ error: 'Primary gym profile not found.' });
       if (req.body.gymData !== undefined) owner.gymData = req.body.gymData;
       if (req.body.gymName !== undefined) owner.gymName = req.body.gymName;
       await owner.save();
       return res.json({ message: 'Profile updated.' });
     } else {
       const gym = await Gym.findByPk(activeId);
-      if (!gym) return res.status(404).json({ error: 'Gym profile not found.' });
+      if (!gym) return res.status(404).json({ error: 'Additional gym profile not found.' });
       if (req.body.gymData !== undefined) gym.gymData = req.body.gymData;
       if (req.body.gymName !== undefined) gym.name = req.body.gymName;
       await gym.save();
