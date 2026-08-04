@@ -82,10 +82,15 @@ async function openManageGymModal() {
   }
 }
 
+/* ── Safe escaping for inline JavaScript (onclick attributes) ── */
+function jsEsc(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
 function renderGymList(gyms) {
   const container = document.getElementById('gymListContainer');
   
-  // Exclude rejected gyms (where both isApproved & pendingApproval are false)
+  // Exclude rejected gyms
   const visibleGyms = gyms.filter(g => !(g.isApproved === false && g.pendingApproval === false));
 
   if (!visibleGyms.length) { container.innerHTML = '<div style="text-align:center;padding:20px;color:#8AABAB">No gyms found</div>'; return; }
@@ -98,14 +103,16 @@ function renderGymList(gyms) {
     if (g.current) {
       statusBadge = `<span style="background:#E8F8EF;color:#27AE60;padding:2px 9px;border-radius:12px;font-size:.65rem;font-weight:800">✓ Active</span>`;
     } else if (g.isApproved) {
-      actionBtn = `<button class="btn btn-sm" style="background:#1A8C8C;color:#fff" onclick="switchGym('${esc(String(g.id))}')">Switch</button>`;
+      // Use jsEsc to prevent apostrophes from breaking the Switch button
+      actionBtn = `<button class="btn btn-sm" style="background:#1A8C8C;color:#fff" onclick="switchGym('${jsEsc(String(g.id))}')">Switch</button>`;
     } else if (g.pendingApproval) {
       statusBadge = `<span style="background:#FEF6E7;color:#F39C12;padding:2px 9px;border-radius:12px;font-size:.65rem;font-weight:800">⏳ Pending Approval</span>`;
     }
 
-    // Add a Delete button ONLY for additional gyms (the primary gym is tied to the root user account)
+    // Add a Delete button ONLY for additional gyms
     if (!g.isPrimary) {
-      deleteBtn = `<button class="btn btn-sm" style="background:#FFF0F0;color:#E74C3C;margin-left:6px" onclick="deleteMyGym('${esc(String(g.id))}', '${esc(g.name)}')">🗑️</button>`;
+      // Use jsEsc to prevent apostrophes from breaking the Delete button
+      deleteBtn = `<button class="btn btn-sm" style="background:#FFF0F0;color:#E74C3C;margin-left:6px" onclick="deleteMyGym('${jsEsc(String(g.id))}', '${jsEsc(g.name)}')">🗑️</button>`;
     }
 
     return `
