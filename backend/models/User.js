@@ -16,19 +16,12 @@ const User = sequelize.define('User', {
     validate: { len: { args: [6, 255], msg: 'Password must be at least 6 characters' } }
   },
 
-  // ─── 3-tier role system ───────────────────────────────────
   role: {
     type: DataTypes.ENUM('superadmin', 'admin', 'staff'),
     defaultValue: 'admin'
   },
-
-  // gymId — the admin's own id whose data this user shares
   gymId: { type: DataTypes.INTEGER, allowNull: true },
-
   gymName: { type: DataTypes.STRING, defaultValue: '' },
-
-  // Max members this gym can add, set by superadmin. NULL = unlimited.
-  // Editable anytime from the superadmin dashboard.
   memberLimit: { type: DataTypes.INTEGER, allowNull: true, defaultValue: null },
 
   staffPermissions: {
@@ -51,11 +44,10 @@ const User = sequelize.define('User', {
   lastLogin: { type: DataTypes.DATE, allowNull: true },
   gymData: { type: DataTypes.TEXT, defaultValue: '{}' },
 
-  // Password reset request — admins need superadmin approval, staff need
-  // their gym admin's approval. Nothing changes the password until that
-  // approval happens.
+  // Password reset system
   resetRequested: { type: DataTypes.BOOLEAN, defaultValue: false },
-  resetRequestedAt: { type: DataTypes.DATE, allowNull: true }
+  resetRequestedAt: { type: DataTypes.DATE, allowNull: true },
+  pendingPassword: { type: DataTypes.STRING, allowNull: true } // securely holds the hashed requested password
 }, {
   tableName: 'users',
   timestamps: true,
@@ -71,13 +63,10 @@ const User = sequelize.define('User', {
   }
 });
 
-// Same helper the frontend/routes rely on
 User.prototype.comparePassword = async function (pwd) {
   return bcrypt.compare(pwd, this.password);
 };
 
-// Add a Mongo-style "_id" alongside "id" so the existing frontend
-// (built expecting Mongo's _id field) keeps working without changes.
 User.prototype.toJSON = function () {
   const values = { ...this.get() };
   values._id = String(values.id);
