@@ -120,24 +120,20 @@ function renderGymList(gyms) {
 
 // Add this function directly underneath renderGymList
 async function deleteMyGym(gymId, name) {
-  if (!confirm(`Permanently delete "${name}"?\nAll members, trainers, and attendance data linked to this gym will be LOST. This cannot be undone.`)) return;
-  try {
-    const res = await fetch(`${BASE}/auth/my-gym/${gymId}`, { method: 'DELETE', headers: hdrs() });
-    const data = await res.json();
-    if (!res.ok) { toast(data.error || 'Failed to delete gym', 'error'); return; }
-
-    toast(data.message || 'Gym deleted successfully', 'success');
-
-    // Return owner to the Primary gym if they happened to delete the gym they were currently viewing
-    const u = JSON.parse(localStorage.getItem('user') || '{}');
-    if (Number(u.gymId) === Number(gymId)) {
-        await switchGym(u.id);
-    } else {
-        openManageGymModal(); // Silently refresh the list
-    }
-  } catch (e) {
-    toast('Network error', 'error');
-  }
+  doubleConfirm(`Permanently delete "${name}"?\nAll members, trainers, and attendance data linked to this gym will be LOST.`, async () => {
+    try {
+      const res = await fetch(`${BASE}/auth/my-gym/${gymId}`, { method: 'DELETE', headers: hdrs() });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error || 'Failed to delete gym', 'error'); return; }
+      toast(data.message || 'Gym deleted successfully', 'success');
+      const u = JSON.parse(localStorage.getItem('user') || '{}');
+      if (Number(u.gymId) === Number(gymId)) {
+          await switchGym(u.id);
+      } else {
+          openManageGymModal();
+      }
+    } catch (e) { toast('Network error', 'error'); }
+  });
 }
 
 async function switchGym(gymId) {
@@ -991,14 +987,14 @@ async function loadAllMembers() {
 }
 
 async function delMember(id, name) {
-  if (!confirm(`Delete "${name}"? Cannot undo.`)) return;
-  try {
-    const res = await fetch(`${API}/${id}`, {method:'DELETE',headers:hdrs()});
-    if (res.ok) { toast(`${name} deleted`,'success'); loadAllMembers(); loadDashboard(); loadPayments(); }
-    else toast('Error deleting','error');
-  } catch(e) { toast('Network error','error'); }
+  doubleConfirm(`Delete "${name}"? Cannot undo.`, async () => {
+    try {
+      const res = await fetch(`${API}/${id}`, {method:'DELETE',headers:hdrs()});
+      if (res.ok) { toast(`${name} deleted`,'success'); loadAllMembers(); loadDashboard(); loadPayments(); }
+      else toast('Error deleting','error');
+    } catch(e) { toast('Network error','error'); }
+  });
 }
-
 /* ── EDIT MEMBER ── */
 async function openEditMember(id) {
   try {
@@ -1911,14 +1907,15 @@ async function saveEditTrainer() {
   } catch(e) { toast('Network error','error'); }
 }
 
-async function delTrainer(id,name) {
-  if(!confirm(`Delete trainer "${name}"?`))return;
-  try{
-    const res=await fetch(`${TAPI}/${id}`,{method:'DELETE',headers:hdrs()});
-    if(res.ok){toast('Deleted','success');loadTrainers();}else toast('Error','error');
-  }catch(e){toast('Error','error');}
+async function delTrainer(id, name) {
+  doubleConfirm(`Delete trainer "${name}"?`, async () => {
+    try {
+      const res = await fetch(`${TAPI}/${id}`,{method:'DELETE',headers:hdrs()});
+      if (res.ok) { toast('Deleted','success'); loadTrainers(); }
+      else toast('Error','error');
+    } catch(e) { toast('Error','error'); }
+  });
 }
-
 document.getElementById('addTrainerForm')?.addEventListener('submit', async e => {
   e.preventDefault();
   const phone = document.getElementById('tPhone').value.trim();
