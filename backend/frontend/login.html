@@ -22,14 +22,12 @@
     input,select{-webkit-user-select:auto;user-select:auto}
     .wrap{width:100%;max-width:420px;position:relative;z-index:1}
 
-    /* Brand */
     .brand{text-align:center;margin-bottom:1.4rem}
     .brand-logo{width:68px;height:68px;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.3);
       border-radius:20px;display:inline-flex;align-items:center;justify-content:center;font-size:1.9rem;margin-bottom:.75rem}
     .brand h1{font-size:1.9rem;font-weight:800;color:#fff;letter-spacing:-.5px;margin-bottom:3px}
     .brand p{color:rgba(255,255,255,.6);font-size:.78rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase}
 
-    /* Role selector pills */
     .role-pills{display:flex;gap:6px;margin-bottom:14px}
     .role-pill{flex:1;padding:9px 4px;border:2px solid rgba(255,255,255,.25);border-radius:12px;
       background:rgba(255,255,255,.1);color:rgba(255,255,255,.75);font-family:'DM Sans',sans-serif;
@@ -37,22 +35,18 @@
     .role-pill.active{background:#fff;color:var(--teal);border-color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.15)}
     .role-pill:hover:not(.active){background:rgba(255,255,255,.18)}
 
-    /* Card */
     .card{background:var(--card);border-radius:22px;padding:1.5rem;box-shadow:0 20px 60px rgba(0,0,0,.22)}
 
-    /* Inner tabs (Login / Register) */
     .tabs{display:flex;background:var(--bg);border-radius:11px;padding:4px;margin-bottom:1.2rem;gap:4px}
     .tab{flex:1;padding:8px;border:none;background:transparent;border-radius:8px;
       font-family:'DM Sans',sans-serif;font-size:.85rem;font-weight:700;color:var(--tx2);cursor:pointer;transition:all .2s}
     .tab.active{background:#fff;color:var(--teal);box-shadow:0 1px 6px rgba(0,0,0,.1)}
 
-    /* Message */
     .msg{padding:10px 13px;border-radius:10px;font-size:.84rem;font-weight:600;margin-bottom:.9rem;display:none;line-height:1.4}
     .msg.error  {background:#FFF0F0;color:var(--red);border:1px solid #FECDD5;display:block}
     .msg.success{background:#EDFBF3;color:#1A6B3C;border:1px solid #A7F3D0;display:block}
     .msg.info   {background:#E3F2FD;color:#1565C0;border:1px solid #BBDEFB;display:block}
 
-    /* Fields */
     .field{margin-bottom:.85rem}
     .field label{display:block;font-size:.68rem;font-weight:800;color:var(--teal);
       margin-bottom:4px;text-transform:uppercase;letter-spacing:.6px}
@@ -69,11 +63,9 @@
     .btn:active{transform:scale(.97)}
     .btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
 
-    /* Bottom note */
     .note{margin-top:1rem;text-align:center;font-size:.76rem;color:rgba(255,255,255,.55);line-height:1.5}
     .note strong{color:rgba(255,255,255,.85)}
 
-    /* Role badge strip */
     .role-badge-strip{display:flex;align-items:center;gap:8px;margin-bottom:1rem;padding:10px 12px;
       border-radius:12px;font-size:.82rem;font-weight:700}
     .rbs-sa{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)}
@@ -82,25 +74,43 @@
   </style>
 </head>
 <body>
+
+<!-- Forgot Password Setup Modal -->
+<div id="forgotPwdModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:18px;padding:24px 20px;width:100%;max-width:340px;">
+    <h3 style="font-size:1.15rem;font-weight:800;color:#1A2E2E;margin-bottom:8px">Reset Password</h3>
+    <p style="font-size:.8rem;color:#4A6464;margin-bottom:16px">Enter your email and a new password. The request will be securely sent to the admin for approval.</p>
+    
+    <label style="font-size:.7rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;margin-bottom:4px;display:block">Account Email</label>
+    <input type="email" id="fpEmail" placeholder="your@email.com" style="width:100%;padding:10px 12px;border:2px solid #E0ECEC;border-radius:10px;margin-bottom:12px;font-family:inherit;font-size:.9rem">
+    
+    <label style="font-size:.7rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;margin-bottom:4px;display:block">New Password</label>
+    <input type="password" id="fpNew" placeholder="Min 6 characters" style="width:100%;padding:10px 12px;border:2px solid #E0ECEC;border-radius:10px;margin-bottom:12px;font-family:inherit;font-size:.9rem">
+    
+    <label style="font-size:.7rem;font-weight:800;color:#1A8C8C;text-transform:uppercase;margin-bottom:4px;display:block">Confirm Password</label>
+    <input type="password" id="fpConfirm" placeholder="Type password again" style="width:100%;padding:10px 12px;border:2px solid #E0ECEC;border-radius:10px;margin-bottom:20px;font-family:inherit;font-size:.9rem">
+    
+    <div style="display:flex;gap:10px">
+      <button onclick="document.getElementById('forgotPwdModal').style.display='none'" style="flex:1;padding:12px;border:1px solid #E0ECEC;border-radius:12px;background:#F0F5F5;font-weight:700;color:#4A6464;cursor:pointer;font-family:inherit">Cancel</button>
+      <button onclick="submitForgotPassword()" style="flex:1;padding:12px;border:none;border-radius:12px;background:#1A8C8C;color:#fff;font-weight:700;cursor:pointer;font-family:inherit">Submit Request</button>
+    </div>
+  </div>
+</div>
+
 <div class="wrap">
-  <!-- Brand -->
   <div class="brand">
     <div class="brand-logo">🏋️</div>
     <h1>GymPro</h1>
     <p>Build · Transform · Achieve</p>
   </div>
 
-  <!-- Role pills -->
   <div class="role-pills">
     <button class="role-pill" onclick="setRole('superadmin')">🏆 Super Admin</button>
     <button class="role-pill active" onclick="setRole('admin')">🏋️ Gym Admin</button>
     <button class="role-pill" onclick="setRole('staff')">👤 Staff</button>
   </div>
 
-  <!-- Card -->
   <div class="card">
-
-    <!-- SuperAdmin view: Login + Create Account tabs -->
     <div id="view-superadmin" style="display:none">
       <div class="role-badge-strip rbs-sa">🏆 GymPro Creator</div>
       <div class="tabs">
@@ -109,14 +119,12 @@
       </div>
       <div class="msg" id="msg-sa"></div>
 
-      <!-- Super Admin Login -->
       <div id="sa-login">
         <div class="field"><label>Email</label><input type="email" id="sa-email" placeholder="hprabha585@gmail.com" autocomplete="email"></div>
         <div class="field"><label>Password</label><div style="position:relative"><input type="password" id="sa-pass" placeholder="Password" autocomplete="current-password"><button type="button" onclick="togglePw('sa-pass', this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;padding:4px;color:#8AABAB" aria-label="Show password">👁️</button></div></div>
         <button class="btn" onclick="doLogin('superadmin')">Login as Super Admin</button>
       </div>
 
-      <!-- Super Admin Create Account (request — needs manual DB approval) -->
       <div id="sa-register" class="hidden">
         <p style="font-size:.78rem;color:#8AABAB;margin-bottom:12px;line-height:1.5">
           ⚠️ For security, this creates a <strong>pending request only</strong>.
@@ -130,7 +138,6 @@
       </div>
     </div>
 
-    <!-- Admin view: Login + Register tabs -->
     <div id="view-admin">
       <div class="tabs">
         <button class="tab active" onclick="setAdminTab('login')">Login</button>
@@ -138,17 +145,15 @@
       </div>
       <div class="msg" id="msg-ad"></div>
 
-      <!-- Admin Login -->
       <div id="admin-login">
         <div class="field"><label>Email</label><input type="email" id="ad-email" placeholder="you@email.com" autocomplete="email"></div>
         <div class="field"><label>Password</label><div style="position:relative"><input type="password" id="ad-pass" placeholder="Password" autocomplete="current-password"><button type="button" onclick="togglePw('ad-pass', this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;padding:4px;color:#8AABAB" aria-label="Show password">👁️</button></div></div>
         <button class="btn" onclick="doLogin('admin')">Login</button>
         <div style="text-align:center;margin-top:12px">
-          <a href="#" onclick="promptForgotPassword();return false" style="font-size:.78rem;color:#1A8C8C;font-weight:700;text-decoration:none">Forgot password?</a>
+          <a href="#" onclick="document.getElementById('forgotPwdModal').style.display='flex';return false" style="font-size:.78rem;color:#1A8C8C;font-weight:700;text-decoration:none">Forgot password?</a>
         </div>
       </div>
 
-      <!-- Admin Register -->
       <div id="admin-register" class="hidden">
         <div class="field"><label>Your Name</label><input type="text" id="ad-name" placeholder="Owner / Manager name" autocomplete="name"></div>
         <div class="field"><label>Gym Name</label><input type="text" id="ad-gymname" placeholder="e.g. PowerHouse Gym"></div>
@@ -158,7 +163,6 @@
       </div>
     </div>
 
-    <!-- Staff view: Login + Register tabs -->
     <div id="view-staff" style="display:none">
       <div class="tabs">
         <button class="tab active" onclick="setStaffTab('login')">Login</button>
@@ -166,17 +170,15 @@
       </div>
       <div class="msg" id="msg-st"></div>
 
-      <!-- Staff Login -->
       <div id="staff-login">
         <div class="field"><label>Email</label><input type="email" id="st-email" placeholder="your@email.com" autocomplete="email"></div>
         <div class="field"><label>Password</label><div style="position:relative"><input type="password" id="st-pass" placeholder="Password" autocomplete="current-password"><button type="button" onclick="togglePw('st-pass', this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;padding:4px;color:#8AABAB" aria-label="Show password">👁️</button></div></div>
         <button class="btn" onclick="doLogin('staff')">Login</button>
         <div style="text-align:center;margin-top:12px">
-          <a href="#" onclick="promptForgotPassword();return false" style="font-size:.78rem;color:#1A8C8C;font-weight:700;text-decoration:none">Forgot password?</a>
+          <a href="#" onclick="document.getElementById('forgotPwdModal').style.display='flex';return false" style="font-size:.78rem;color:#1A8C8C;font-weight:700;text-decoration:none">Forgot password?</a>
         </div>
       </div>
 
-      <!-- Staff Register -->
       <div id="staff-register" class="hidden">
         <div class="field"><label>Your Name</label><input type="text" id="st-name" placeholder="Full name" autocomplete="name"></div>
         <div class="field">
@@ -189,8 +191,7 @@
         <button class="btn" onclick="doRegisterStaff()">Send Request to Admin</button>
       </div>
     </div>
-
-  </div><!-- /card -->
+  </div>
 
   <div class="note" id="bottom-note">
     💡 Select your role above to login or create an account
@@ -201,17 +202,28 @@
 const API = 'https://lightpink-mandrill-900007.hostingersite.com/api/auth';
 let currentRole = 'admin';
 
-// Show/hide password toggle — used by every password field's 👁️ button
-async function promptForgotPassword() {
-  const email = prompt('Enter your account email — a reset request will be sent for approval:');
-  if (!email || !email.trim()) return;
+async function submitForgotPassword() {
+  const email = document.getElementById('fpEmail').value.trim();
+  const pass = document.getElementById('fpNew').value;
+  const conf = document.getElementById('fpConfirm').value;
+  
+  if (!email || !pass || !conf) { alert('Please fill all fields'); return; }
+  if (pass.length < 6) { alert('New password must be at least 6 characters'); return; }
+  if (pass !== conf) { alert('Passwords do not match'); return; }
+
   try {
     const res = await fetch(`${API}/request-password-reset`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim() })
+      body: JSON.stringify({ email: email, newPassword: pass })
     });
     const data = await res.json();
     alert(data.message || (res.ok ? 'Request submitted.' : 'Something went wrong.'));
+    if (res.ok) {
+        document.getElementById('forgotPwdModal').style.display = 'none';
+        document.getElementById('fpEmail').value = '';
+        document.getElementById('fpNew').value = '';
+        document.getElementById('fpConfirm').value = '';
+    }
   } catch (e) {
     alert('Network error. Please try again.');
   }
@@ -221,17 +233,12 @@ function togglePw(inputId, btn) {
   const input = document.getElementById(inputId);
   if (!input) return;
   if (input.type === 'password') {
-    input.type = 'text';
-    btn.textContent = '🙈';
-    btn.setAttribute('aria-label', 'Hide password');
+    input.type = 'text'; btn.textContent = '🙈'; btn.setAttribute('aria-label', 'Hide password');
   } else {
-    input.type = 'password';
-    btn.textContent = '👁️';
-    btn.setAttribute('aria-label', 'Show password');
+    input.type = 'password'; btn.textContent = '👁️'; btn.setAttribute('aria-label', 'Show password');
   }
 }
 
-// Redirect if already logged in
 (function() {
   const token = localStorage.getItem('token');
   if (!token) return;
@@ -241,17 +248,13 @@ function togglePw(inputId, btn) {
 
 function setRole(role) {
   currentRole = role;
-  // Pills
   document.querySelectorAll('.role-pill').forEach((p,i) => {
     p.classList.toggle('active', ['superadmin','admin','staff'][i] === role);
   });
-  // Views
   document.getElementById('view-superadmin').style.display = role==='superadmin' ? 'block' : 'none';
   document.getElementById('view-admin').style.display      = role==='admin'       ? 'block' : 'none';
   document.getElementById('view-staff').style.display      = role==='staff'       ? 'block' : 'none';
-  // Clear messages
   ['msg-sa','msg-ad','msg-st'].forEach(id => { const el=document.getElementById(id); if(el){el.className='msg';el.textContent='';} });
-  // Bottom note
   const notes = {
     superadmin: '🔒 Super Admin access is restricted to GymPro creator only.',
     admin:      '💡 Register your gym for GymPro access. Approval required.',
@@ -284,15 +287,13 @@ function setStaffTab(tab) {
 function showMsg(id, text, type) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.textContent = text;
-  el.className = 'msg ' + type;
+  el.textContent = text; el.className = 'msg ' + type;
 }
 function clearMsg(id) {
   const el = document.getElementById(id);
   if (el) { el.className='msg'; el.textContent=''; }
 }
 
-/* ── Login (all roles share this) ─────────────────────────── */
 async function doLogin(role) {
   const emailId = role==='superadmin' ? 'sa-email' : role==='admin' ? 'ad-email' : 'st-email';
   const passId  = role==='superadmin' ? 'sa-pass'  : role==='admin' ? 'ad-pass'  : 'st-pass';
@@ -311,7 +312,6 @@ async function doLogin(role) {
     });
     const data = await res.json();
     if (res.ok) {
-      // Role mismatch guard
       if (role!=='admin' && data.user.role !== role) {
         showMsg(msgId, `This login is for ${role}s only. Your account role is "${data.user.role}".`, 'error');
         btn.disabled=false; btn.textContent='Login'; return;
@@ -331,7 +331,6 @@ async function doLogin(role) {
   }
 }
 
-/* ── Register Gym Admin ────────────────────────────────────── */
 async function doRegisterSuperadmin() {
   const name     = document.getElementById('sa-reg-name').value.trim();
   const email    = document.getElementById('sa-reg-email').value.trim();
@@ -354,9 +353,7 @@ async function doRegisterSuperadmin() {
           <div style="font-size:3rem;margin-bottom:12px">⏳</div>
           <div style="font-size:1.05rem;font-weight:800;color:#1A2E2E;margin-bottom:8px">Request Submitted!</div>
           <p style="color:#4A6464;font-size:.85rem;line-height:1.7">
-            This account cannot log in yet — it must be approved
-            <strong>directly in the database</strong> by the site owner
-            before it becomes active.
+            This account cannot log in yet — it must be approved directly in the database.
           </p>
           <a href="/login.html" style="display:inline-block;margin-top:16px;color:#1A8C8C;font-weight:700;font-size:.85rem;text-decoration:none">← Back to login</a>
         </div>`;
@@ -393,9 +390,7 @@ async function doRegisterAdmin() {
           <div style="font-size:3rem;margin-bottom:12px">⏳</div>
           <div style="font-size:1.05rem;font-weight:800;color:#1A2E2E;margin-bottom:8px">Request Submitted!</div>
           <p style="color:#4A6464;font-size:.85rem;line-height:1.7">
-            <strong>${gymName}</strong> gym registration has been sent to the
-            <strong>GymPro team</strong> for review.<br><br>
-            You'll be notified once approved. Usually takes <strong>24–48 hours</strong>.
+            <strong>${gymName}</strong> gym registration has been sent to the GymPro team for review.
           </p>
         </div>`;
     } else {
@@ -408,7 +403,6 @@ async function doRegisterAdmin() {
   }
 }
 
-/* ── Register Staff ────────────────────────────────────────── */
 async function doRegisterStaff() {
   const name       = document.getElementById('st-name').value.trim();
   const adminEmail = document.getElementById('st-admin-email').value.trim();
@@ -432,8 +426,7 @@ async function doRegisterStaff() {
           <div style="font-size:3rem;margin-bottom:12px">📨</div>
           <div style="font-size:1.05rem;font-weight:800;color:#1A2E2E;margin-bottom:8px">Request Sent!</div>
           <p style="color:#4A6464;font-size:.85rem;line-height:1.7">
-            Your request has been sent to your gym admin.<br><br>
-            Once the admin approves you, come back here and <strong>Login</strong> with your credentials.
+            Your request has been sent to your gym admin.
           </p>
         </div>`;
     } else {
@@ -446,7 +439,6 @@ async function doRegisterStaff() {
   }
 }
 
-// Default: show admin view
 setRole('admin');
 </script>
 </body>
