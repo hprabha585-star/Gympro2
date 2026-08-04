@@ -308,36 +308,35 @@ router.get('/users', verifyToken, superAdminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Staff password reset ─────────────
+// STAFF PASSWORD RESET APPROVAL LOGIC
 router.get('/pending-staff-password-resets', verifyToken, adminOnly, async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
     const list = await User.findAll({
       where: { role: 'staff', gymId, resetRequested: true },
-      attributes: { exclude: ['password'] },
+      attributes: { exclude: ['password', 'pendingPassword'] },
       order: [['resetRequestedAt', 'DESC']]
     });
     res.json(list);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Approval applies the securely hashed password and wipes the temporary holding bay
 router.post('/approve-staff-password-reset/:userId', verifyToken, adminOnly, async (req, res) => {
   try {
-    const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 6)
-      return res.status(400).json({ error: 'New password must be at least 6 characters.' });
-
     const gymId = Number(req.user.gymId || req.user.userId);
     const staff = await User.findByPk(req.params.userId);
-    if (!staff || staff.role !== 'staff' || Number(staff.gymId) !== gymId)
-      return res.status(403).json({ error: 'Not your staff member.' });
+    if (!staff || staff.role !== 'staff' || Number(staff.gymId) !== gymId || !staff.resetRequested)
+      return res.status(403).json({ error: 'Not your staff member or no valid request pending.' });
 
-    staff.password = newPassword; 
-    staff.resetRequested = false;
-    staff.resetRequestedAt = null;
-    await staff.save();
+    await User.update({
+      password: staff.pendingPassword,
+      pendingPassword: null,
+      resetRequested: false,
+      resetRequestedAt: null
+    }, { where: { id: staff.id } });
 
-    res.json({ message: `Password reset for ${staff.name}.` });
+    res.json({ message: `Password reset approved for ${staff.name}.` });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -345,11 +344,11 @@ router.post('/reject-staff-password-reset/:userId', verifyToken, adminOnly, asyn
   try {
     const gymId = Number(req.user.gymId || req.user.userId);
     const staff = await User.findByPk(req.params.userId);
-    if (!staff || staff.role !== 'staff' || Number(staff.gymId) !== gymId)
-      return res.status(403).json({ error: 'Not your staff member.' });
+    if (!staff || staff.role !== 'staff' || Number(staff.gymId) !== gymId) return res.status(403).json({ error: 'Not your staff member.' });
 
     staff.resetRequested = false;
     staff.resetRequestedAt = null;
+    staff.pendingPassword = null;
     await staff.save();
     res.json({ message: `Reset request for ${staff.name} dismissed.` });
   } catch (err) { res.status(500).json({ error: err.message }); }
