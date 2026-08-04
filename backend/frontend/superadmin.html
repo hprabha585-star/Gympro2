@@ -137,15 +137,56 @@
 
 <div id="toast" class="toast"></div>
 
+<!-- DOUBLE CONFIRMATION MODAL -->
+<div id="doubleConfirmModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:18px;padding:24px 20px;width:100%;max-width:340px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.2)">
+    <div style="font-size:3rem;margin-bottom:12px;line-height:1">⚠️</div>
+    <h3 style="font-size:1.15rem;font-weight:800;color:#1A2E2E;margin-bottom:8px">Double Confirmation</h3>
+    <p id="dcMessage" style="font-size:.85rem;color:#4A6464;margin-bottom:16px;line-height:1.4"></p>
+    <p style="font-size:.75rem;font-weight:700;color:#E74C3C;margin-bottom:8px">Type <strong style="color:#1A2E2E;background:#F0F5F5;padding:2px 6px;border-radius:4px">DELETE</strong> below to confirm:</p>
+    <input type="text" id="dcInput" autocomplete="off" placeholder="Type DELETE here" style="width:100%;padding:10px;border:2px solid #E0ECEC;border-radius:10px;font-family:inherit;font-size:1rem;font-weight:800;text-align:center;color:#E74C3C;margin-bottom:16px;text-transform:uppercase">
+    <div style="display:flex;gap:10px">
+      <button onclick="closeDoubleConfirm()" style="flex:1;padding:12px;border:1px solid #E0ECEC;border-radius:12px;background:#F0F5F5;font-weight:700;cursor:pointer">Cancel</button>
+      <button id="dcYesBtn" disabled style="flex:1;padding:12px;border:none;border-radius:12px;background:#E74C3C;color:#fff;font-weight:700;cursor:not-allowed;opacity:.5">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const BASE = 'https://lightpink-mandrill-900007.hostingersite.com/api';
 const hdrs = () => ({ 'Content-Type':'application/json', 'Authorization':`Bearer ${localStorage.getItem('token')}` });
 let _rejectTarget = null;
 
-// Safe escaping for strings embedded inside inline JavaScript (onclick attributes)
 function jsEsc(s) {
   return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
+
+// Custom Double Confirmation Logic
+let _dcCallback = null;
+function doubleConfirm(msg, cb) {
+  document.getElementById('dcMessage').textContent = msg;
+  _dcCallback = cb;
+  const input = document.getElementById('dcInput');
+  const btn = document.getElementById('dcYesBtn');
+  input.value = ''; btn.disabled = true; btn.style.opacity = '.5'; btn.style.cursor = 'not-allowed';
+  document.getElementById('doubleConfirmModal').style.display = 'flex';
+  
+  input.oninput = (e) => {
+    if (e.target.value.trim().toUpperCase() === 'DELETE') {
+      btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
+    } else {
+      btn.disabled = true; btn.style.opacity = '.5'; btn.style.cursor = 'not-allowed';
+    }
+  };
+}
+function closeDoubleConfirm() {
+  document.getElementById('doubleConfirmModal').style.display = 'none';
+  _dcCallback = null;
+}
+document.getElementById('dcYesBtn').onclick = () => {
+  if (_dcCallback) _dcCallback();
+  closeDoubleConfirm();
+};
 
 (function() {
   const u = JSON.parse(localStorage.getItem('user') || '{}');
@@ -191,7 +232,6 @@ async function loadAll() {
   await Promise.all([ loadPending(), loadPendingGyms(), loadPendingResets(), loadAllGyms() ]);
 }
 
-/* ── Pending admin (gym owner) approvals ─────────────────────────── */
 async function loadPending() {
   try {
     const res = await fetch(BASE + '/auth/pending-approvals', { headers: hdrs() });
@@ -249,7 +289,6 @@ async function approveAdmin(userId, gymName) {
   } catch (e) { toast('Network error', 'error'); }
 }
 
-/* ── Pending additional-gym approvals ────────────────────────────── */
 async function loadPendingGyms() {
   try {
     const res = await fetch(BASE + '/admin/pending-gyms', { headers: hdrs() });
@@ -311,7 +350,6 @@ async function approveExtraGym(gymId, name) {
   } catch (e) { toast('Network error', 'error'); }
 }
 
-/* ── Pending password resets ─────────────────────────────────────── */
 async function loadPendingResets() {
   try {
     const res = await fetch(BASE + '/auth/pending-password-resets', { headers: hdrs() });
@@ -336,11 +374,7 @@ async function loadPendingResets() {
           '</div>' +
         '</div>' +
         '<div class="btn-row">' +
-          '<div class="limit-field" style="flex:1;min-width:160px">' +
-            '<label>🔑 New pwd</label>' +
-            '<input type="text" id="newpwd-' + esc(String(u._id)) + '" placeholder="6+ characters" style="width:100%">' +
-          '</div>' +
-          '<button class="btn btn-approve" onclick="approvePasswordReset(\'' + jsEsc(String(u._id)) + '\',\'' + jsEsc(u.name) + '\')">✅ Set & Approve</button>' +
+          '<button class="btn btn-approve" onclick="approvePasswordReset(\'' + jsEsc(String(u._id)) + '\',\'' + jsEsc(u.name) + '\')">✅ Approve Reset</button>' +
           '<button class="btn btn-reject" onclick="rejectPasswordReset(\'' + jsEsc(String(u._id)) + '\',\'' + jsEsc(u.name) + '\')">❌ Dismiss</button>' +
         '</div>' +
       '</div>';
@@ -351,15 +385,12 @@ async function loadPendingResets() {
 }
 
 async function approvePasswordReset(userId, name) {
-  const pwdInput = document.getElementById('newpwd-' + userId);
-  const newPassword = pwdInput ? pwdInput.value.trim() : '';
-  if (!newPassword || newPassword.length < 6) { toast('Enter a password (6+ characters) first', 'error'); return; }
   try {
     const res = await fetch(BASE + '/auth/approve-password-reset/' + userId, {
-      method: 'POST', headers: hdrs(), body: JSON.stringify({ newPassword: newPassword })
+      method: 'POST', headers: hdrs()
     });
     const data = await res.json();
-    if (res.ok) { toast(data.message || ('Password reset for ' + name), 'success'); loadPendingResets(); }
+    if (res.ok) { toast(data.message || ('Password reset approved for ' + name), 'success'); loadPendingResets(); }
     else { toast(data.error || 'Failed', 'error'); }
   } catch (e) { toast('Network error', 'error'); }
 }
@@ -373,7 +404,6 @@ async function rejectPasswordReset(userId, name) {
   } catch (e) { toast('Network error', 'error'); }
 }
 
-/* ── All Gyms — list, member-limit edit, suspend/activate, delete ─── */
 async function loadAllGyms() {
   try {
     const res = await fetch(BASE + '/admin/all-gyms', { headers: hdrs() });
@@ -393,7 +423,6 @@ async function loadAllGyms() {
         : '<span class="status s-inactive">⏸ Suspended</span>';
       const limitLabel = g.memberLimit ? (g.memberLimit + ' members') : 'Unlimited';
 
-      // Ensure Suspend doesn't appear for secondary gyms (only primary root accounts can be suspended)
       const suspendBtn = g.isPrimary
         ? '<button class="btn ' + (g.isActive ? 'btn-warn' : 'btn-approve') + ' btn-sm" onclick="toggleGym(\'' + jsEsc(String(g._id)) + '\',\'' + jsEsc(g.gymName) + '\')">' + (g.isActive ? '⏸ Suspend' : '▶ Activate') + '</button>'
         : '';
@@ -451,16 +480,16 @@ async function toggleGym(gymId, name) {
 }
 
 async function deleteGym(gymId, name) {
-  if (!confirm('Permanently delete "' + name + '"? This removes the gym owner account and all of its staff accounts. This cannot be undone.')) return;
-  try {
-    const res = await fetch(BASE + '/admin/gym/' + gymId, { method: 'DELETE', headers: hdrs() });
-    const data = await res.json();
-    if (res.ok) { toast(data.message || (name + ' removed'), 'success'); loadAllGyms(); }
-    else { toast(data.error || 'Failed to delete', 'error'); }
-  } catch (e) { toast('Network error', 'error'); }
+  doubleConfirm('Permanently delete "' + name + '"? This removes the gym owner account and all of its staff accounts. This cannot be undone.', async () => {
+    try {
+      const res = await fetch(BASE + '/admin/gym/' + gymId, { method: 'DELETE', headers: hdrs() });
+      const data = await res.json();
+      if (res.ok) { toast(data.message || (name + ' removed'), 'success'); loadAllGyms(); }
+      else { toast(data.error || 'Failed to delete', 'error'); }
+    } catch (e) { toast('Network error', 'error'); }
+  });
 }
 
-/* ── Reject modal (shared by admin + gym rejections) ─────────────── */
 function openRejectModal(kind, id) {
   _rejectTarget = { kind: kind, id: id };
   document.getElementById('rejectModalTitle').textContent =
@@ -468,10 +497,12 @@ function openRejectModal(kind, id) {
   document.getElementById('rejectReason').value = '';
   document.getElementById('rejectModal').classList.add('open');
 }
+
 function closeRejectModal() {
   document.getElementById('rejectModal').classList.remove('open');
   _rejectTarget = null;
 }
+
 async function confirmReject() {
   if (!_rejectTarget) return;
   const reason = document.getElementById('rejectReason').value.trim() || 'Not approved.';
