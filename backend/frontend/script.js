@@ -3904,7 +3904,42 @@ async function gaDeleteStaff(staffId, name) {
     else toast(data.error||'Failed','error');
   } catch(e) { toast('Network error','error'); }
 }
+/* ── DOUBLE CONFIRMATION CONTROLLER ── */
+let _dcCallback = null;
 
+function doubleConfirm(msg, cb) {
+  document.getElementById('dcMessage').textContent = msg;
+  _dcCallback = cb;
+  const input = document.getElementById('dcInput');
+  const btn = document.getElementById('dcYesBtn');
+  input.value = '';
+  btn.disabled = true;
+  btn.style.opacity = '.5';
+  btn.style.cursor = 'not-allowed';
+  document.getElementById('doubleConfirmModal').style.display = 'flex';
+  
+  input.oninput = (e) => {
+    if (e.target.value.trim().toUpperCase() === 'DELETE') {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
+    } else {
+      btn.disabled = true;
+      btn.style.opacity = '.5';
+      btn.style.cursor = 'not-allowed';
+    }
+  };
+}
+
+function closeDoubleConfirm() {
+  document.getElementById('doubleConfirmModal').style.display = 'none';
+  _dcCallback = null;
+}
+
+document.getElementById('dcYesBtn')?.addEventListener('click', () => {
+  if (_dcCallback) _dcCallback();
+  closeDoubleConfirm();
+});
 
 
 window.addEventListener('DOMContentLoaded', async () => {
