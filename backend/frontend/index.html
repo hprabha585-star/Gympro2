@@ -726,10 +726,11 @@
         <option value="Inactive">Inactive</option>
       </select>
     </div>
-    <div style="display:flex;flex-direction:column;gap:9px;margin-top:1.1rem">
-      <button class="btn btn-primary btn-full" onclick="saveEditTrainer()" style="min-height:50px;font-size:.96rem">Save Changes</button>
-      <button class="btn btn-ghost btn-full" onclick="closeModal('editTrainerModal')">Cancel</button>
-    </div>
+<div style="display:flex;flex-direction:column;gap:9px;margin-top:1.1rem">
+        <button type="submit" class="btn btn-primary btn-full">Add Member</button>
+        <!-- Updated Cancel button to clear form -->
+        <button type="button" class="btn btn-ghost btn-full" onclick="clearAddMemberForm(); closeModal('addMemberModal')">Cancel</button>
+      </div>
   </div>
 </div>
 
