@@ -31,8 +31,8 @@ let gymCfg     = {};
 function getGymName() {
   try {
     const u = JSON.parse(localStorage.getItem('user') || '{}');
-    return (u.gymName && u.gymName.trim()) || 'Our Gym';
-  } catch (e) { return 'Our Gym'; }
+    return (u.gymName && u.gymName.trim()) || (gymCfg && gymCfg.upiName) || 'My Gym';
+  } catch (e) { return (gymCfg && gymCfg.upiName) || 'My Gym'; }
 }
 let trainerMap = {};
 
@@ -4084,11 +4084,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Show which gym is currently active — important once an owner has
     // more than one gym via Manage Gym, so it's always clear which gym's
     // data you're looking at.
-    if (u.role !== 'superadmin') {
+if (u.role !== 'superadmin') {
       const gymBanner = document.getElementById('activeGymBanner');
       const gymNameEl = document.getElementById('activeGymName');
       if (gymBanner && gymNameEl) {
-        gymNameEl.textContent = u.gymName || 'My Gym';
+        gymNameEl.textContent = getGymName();
         gymBanner.style.display = 'block';
       }
     }
