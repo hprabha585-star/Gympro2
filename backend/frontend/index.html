@@ -1311,7 +1311,7 @@
 <div style="display:flex;flex-direction:column;gap:9px">
       <button class="btn btn-success btn-full" id="confirmPayBtn" onclick="confirmPayment()" disabled
         style="opacity:.5">Select a payment method above</button>
-      <button class="btn btn-ghost btn-full" id="payBackEditBtn" onclick="backToEditMember()" style="display:none">← Back & Edit Details</button>
+      <button type="button" class="btn btn-ghost btn-full" id="payBackBtn" onclick="goBackFromPayment()" style="display:none;background:#F0F5F5;color:#4A6464;border:1px solid #E0ECEC;">⬅️ Back to Edit Details</button>
       <button class="btn btn-ghost btn-full" onclick="cancelPayment()">Cancel</button>
     </div>
   </div>
