@@ -1211,7 +1211,7 @@ document.getElementById('addMemberForm')?.addEventListener('submit', async e => 
 
       // Trial members are added just for identification — no payment expected,
       // so skip forcing the payment modal open for them.
-      if (data.status === 'Trial') {
+if (data.status === 'Trial') {
         // done — nothing further needed for a trial signup
       } else {
         openPaymentFor({
@@ -1224,7 +1224,8 @@ document.getElementById('addMemberForm')?.addEventListener('submit', async e => 
           ptFee: added.ptFee,
           admissionFee: added.admissionFee,
           admissionWaived: added.admissionWaived,
-          paymentDate: paymentDate
+          paymentDate: paymentDate,
+          _restoreData: data // Passes the exact submitted form data
         }, true);
       }
     }else{
@@ -2499,6 +2500,10 @@ function openPaymentFor(m, isNew = false) {
   const mhdr = document.querySelector('#paymentModal .mhdr .mtitle');
   if(mhdr) mhdr.textContent = isNew ? '💳 Complete Payment' : '💳 Renew Plan';
 
+  // Show the "Back to Edit" button ONLY for brand new members
+  const payBackBtn = document.getElementById('payBackBtn');
+  if (payBackBtn) payBackBtn.style.display = isNew ? 'block' : 'none';
+
   const payDiscBox = document.getElementById('payDiscBox');
 
   if (isNew) {
@@ -2850,6 +2855,87 @@ async function cancelPayment() {
   curPayMember = null;
   curPayMethod = null;
   closeModal('paymentModal');
+}
+async function goBackFromPayment() {
+  if (!curPayMember || !curPayMember.isNew) return;
+  
+  const id = curPayMember.id;
+  const m = curPayMember.originalData._restoreData;
+  
+  // 1. Delete the pre-saved member silently in the background
+  try {
+    await fetch(`${API}/${id}`, { method: 'DELETE', headers: hdrs() });
+    allMembersCache = allMembersCache.filter(x => (x._id || x.id) !== id);
+  } catch(e) {
+    console.error("Failed to safely rollback member on back", e);
+  }
+
+  // 2. Close payment modal
+  closeModal('paymentModal');
+
+  if (!m) return; 
+
+  // 3. Repopulate the Add Member form precisely as it was
+  document.getElementById('mName').value = m.name || '';
+  document.getElementById('mPhone').value = m.phone || '';
+  document.getElementById('mEmail').value = m.email || '';
+  document.getElementById('mAge').value = m.age || '';
+  document.getElementById('mGender').value = m.gender || '';
+  
+  populatePlanSelect('mPlan');
+  if (m.plan) document.getElementById('mPlan').value = m.plan;
+  
+  document.querySelectorAll('input[name="dType"]').forEach(r => r.checked = r.value === (m.discountType || 'none'));
+  document.getElementById('dValue').value = m.discountValue || '';
+  document.getElementById('dReason').value = m.discountReason || '';
+  
+  document.getElementById('mAdmFee').value = m.admissionFee || '';
+  document.getElementById('mWaive').value = m.admissionWaived ? 'no' : 'yes';
+  
+  document.getElementById('mPtEnabled').checked = !!m.ptEnabled;
+  document.getElementById('mPtFee').value = m.ptFee || '';
+  if (m.ptTrainer) document.getElementById('mPtTrainer').value = m.ptTrainer;
+  document.getElementById('mPtNotes').value = m.ptNotes || '';
+  togglePT('mPtDetails');
+  
+  document.getElementById('mStart').value = m.joinDate || '';
+  document.getElementById('mExpiry').value = m.expiryDate || '';
+  document.getElementById('mPaymentDate').value = m.paymentDate || '';
+  document.getElementById('mStatus').value = m.status || 'Active';
+  
+  document.getElementById('mEcName').value = m.emergencyContact?.name || '';
+  document.getElementById('mEcPhone').value = m.emergencyContact?.phone || '';
+  document.getElementById('mEcRel').value = m.emergencyContact?.relationship || '';
+  
+  document.getElementById('mNotes').value = m.medicalNotes || '';
+  
+  // Re-inject photo if taken
+  if (m.photo && m.photo.startsWith('data:image')) {
+    document.getElementById('photoPreview').src = m.photo;
+    document.getElementById('photoData').value = m.photo;
+    document.getElementById('clearPhotoBtn').style.display = 'inline-flex';
+  }
+  
+  recalcPrice();
+
+  // Re-inject health conditions blocks dynamically
+  const condContainer = document.getElementById('condContainer');
+  condContainer.innerHTML = '';
+  if (m.healthConditions && m.healthConditions.length) {
+    m.healthConditions.forEach(cond => {
+      addCondition('condContainer');
+      const rows = condContainer.querySelectorAll('.cond-row');
+      const lastRow = rows[rows.length - 1];
+      if (lastRow) {
+        lastRow.querySelector('.cType').value = cond.condition || '';
+        lastRow.querySelector('.cSev').value = cond.severity || 'Mild';
+        lastRow.querySelector('.cNote').value = cond.notes || '';
+      }
+    });
+  }
+
+  // 4. Re-open Add modal so the user can edit
+  openModal('addMemberModal');
 }
 
 async function confirmPayment() {
