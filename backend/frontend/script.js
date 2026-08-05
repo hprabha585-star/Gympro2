@@ -33,8 +33,8 @@ let gymCfg     = {};
 function getGymName() {
   try {
     const u = JSON.parse(localStorage.getItem('user') || '{}');
-    return (u.gymName && u.gymName.trim()) || (gymCfg && gymCfg.upiName && gymCfg.upiName.trim()) || 'Gym';
-  } catch (e) { return (gymCfg && gymCfg.upiName) || 'Gym'; }
+    return (u.gymName && u.gymName.trim()) || (gymCfg && gymCfg.upiName && gymCfg.upiName.trim()) || 'Our Gym';
+  } catch (e) { return (gymCfg && gymCfg.upiName) || 'Our Gym'; }
 }
 let trainerMap = {};
 
@@ -269,6 +269,19 @@ async function loadServerProfile() {
     const res = await fetch(`${BASE}/auth/gym-profile`, { headers: hdrs() });
     if (!res.ok) throw new Error('gym-profile failed');
     const data = await res.json();
+    
+    // --- CAPTURE TRUE GYM NAME FOR STAFF ---
+    const realGymName = data.gymName || data.name || (data.gym && data.gym.name);
+    if (realGymName) {
+      const u = JSON.parse(localStorage.getItem('user') || '{}');
+      u.gymName = realGymName;
+      localStorage.setItem('user', JSON.stringify(u));
+      // Force update the banner immediately if it's already rendered
+      const bannerEl = document.getElementById('activeGymName');
+      if (bannerEl && u.role !== 'superadmin') bannerEl.textContent = realGymName;
+    }
+    // ---------------------------------------
+
     if (data.gymData && data.gymData !== '{}') {
       const d = typeof data.gymData === 'string' ? JSON.parse(data.gymData) : data.gymData;
       if (d.plans && d.plans.length) gymPlans = d.plans;
@@ -4090,7 +4103,7 @@ if (u.role !== 'superadmin') {
       const gymBanner = document.getElementById('activeGymBanner');
       const gymNameEl = document.getElementById('activeGymName');
       if (gymBanner && gymNameEl) {
-        gymNameEl.textContent = u.gymName || 'My Gym';
+        gymNameEl.textContent = getGymName(); // <--- Uses getter instead of hardcoded 'My Gym'
         gymBanner.style.display = 'block';
       }
     }
