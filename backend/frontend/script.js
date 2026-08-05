@@ -28,11 +28,13 @@ let gymCfg     = {};
 
 // The name the logged-in gym owner set for their gym — used in WhatsApp
 // messages instead of the app's own name ("GymPro").
+// The name the logged-in gym owner set for their gym — used in WhatsApp
+// messages instead of the app's own name ("GymPro").
 function getGymName() {
   try {
     const u = JSON.parse(localStorage.getItem('user') || '{}');
-    return (u.gymName && u.gymName.trim()) || (gymCfg && gymCfg.upiName) || 'My Gym';
-  } catch (e) { return (gymCfg && gymCfg.upiName) || 'My Gym'; }
+    return (u.gymName && u.gymName.trim()) || (gymCfg && gymCfg.upiName && gymCfg.upiName.trim()) || 'Gym';
+  } catch (e) { return (gymCfg && gymCfg.upiName) || 'Gym'; }
 }
 let trainerMap = {};
 
@@ -4088,11 +4090,10 @@ if (u.role !== 'superadmin') {
       const gymBanner = document.getElementById('activeGymBanner');
       const gymNameEl = document.getElementById('activeGymName');
       if (gymBanner && gymNameEl) {
-        gymNameEl.textContent = getGymName();
+        gymNameEl.textContent = u.gymName || 'My Gym';
         gymBanner.style.display = 'block';
       }
     }
-
     if (u.role === 'superadmin') {
       // Superadmin has its own dedicated page (superadmin.html) with the
       // real Manage Gym / approval logic — index.html never had a working
