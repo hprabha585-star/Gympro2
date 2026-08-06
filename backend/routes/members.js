@@ -166,7 +166,7 @@ router.delete('/:id', async (req, res) => {
     await Attendance.destroy({ where: { userId: gymId, memberId: req.params.id } });
 
     const history = member.paymentHistory || [];
-    if (history.length > 0 || Number(member.pendingAmount) > 0) {
+    if (history.length > 0) {
       // Soft delete: keep row for revenue, mark as deleted, alter phone to free it up
       member.isDeleted = true;
       member.phone = member.phone + '_del_' + Date.now();
@@ -199,7 +199,7 @@ router.delete('/:id/payment/:groupId', async (req, res) => {
     member.paymentHistory = filteredHistory;
     
     // If a soft-deleted member has their last remaining payment deleted, hard delete them to clean up
-    if (member.isDeleted && filteredHistory.length === 0 && Number(member.pendingAmount) <= 0) {
+    if (member.isDeleted && filteredHistory.length === 0) {
       await member.destroy();
     } else {
       await member.save();
