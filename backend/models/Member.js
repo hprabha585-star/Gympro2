@@ -6,10 +6,10 @@ const Member = sequelize.define('Member', {
   userId: { type: DataTypes.INTEGER, allowNull: false },
 
   name: { type: DataTypes.STRING, allowNull: false },
-  phone: {
+phone: {
     type: DataTypes.STRING,
     allowNull: false,
-    validate: { is: { args: /^\d{10}$/, msg: 'Please enter a valid 10-digit phone number' } }
+    validate: { is: { args: /^(\d{10}(_del_\d+)?)$/, msg: 'Please enter a valid 10-digit phone number' } }
   },
   email: { type: DataTypes.STRING, defaultValue: '' },
   age: { type: DataTypes.INTEGER, validate: { min: 12, max: 100 } },
@@ -53,6 +53,8 @@ const Member = sequelize.define('Member', {
   // Outstanding balance when a member pays less than the full amount due
   // (e.g. pays half now, rest later). 0 = fully paid up.
   pendingAmount: { type: DataTypes.FLOAT, defaultValue: 0 },
+  // Marks member as soft-deleted to preserve their payment history for revenue
+  isDeleted: { type: DataTypes.BOOLEAN, defaultValue: false },
 
   // Auto-assigned sequential member number per gym
   memberNo: { type: DataTypes.INTEGER, allowNull: true }
