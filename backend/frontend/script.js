@@ -2177,6 +2177,7 @@ function _renderPaymentsList() {
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button class="btn btn-sm" style="background:#E3F2FD;color:#2980B9" onclick="dialPhone('${safePhone_p}')" title="Call">📞</button>
             <button class="btn btn-sm" style="background:#FEF6E7;color:#F39C12" onclick="sendPaymentReminder('${safeId_p}','${safePhone_p}','${safeName_p}')" title="Send reminder">🔔</button>
+            <button class="btn btn-sm" style="background:#F0F5F5;color:#6B7280;border:1px solid #E0ECEC" onclick="markMemberInactive('${safeId_p}','${safeName_p.replace(/'/g,"\\'")}')" title="Mark Inactive">⏸️ Inactive</button>
             <button class="btn btn-success btn-sm" onclick="openCollectDue('${safeId_p}')">💰 Receive</button>
           </div>
         </div>`;
@@ -2215,6 +2216,7 @@ function _renderPaymentsList() {
       <div style="display:flex;gap:6px;flex-shrink:0">
         <button class="btn btn-sm" style="background:#E3F2FD;color:#2980B9" onclick="dialPhone('${safePhone_r}')" title="Call">📞</button>
         <button class="btn btn-sm" style="background:#FEF6E7;color:#F39C12" onclick="sendPaymentReminder('${safeId_r}','${safePhone_r}','${safeName_r}')" title="Send reminder">🔔</button>
+        <button class="btn btn-sm" style="background:#F0F5F5;color:#6B7280;border:1px solid #E0ECEC" onclick="markMemberInactive('${safeId_r}','${safeName_r.replace(/'/g,"\\'")}')" title="Mark Inactive">⏸️ Inactive</button>
         <button class="btn btn-success btn-sm" onclick="openPaymentForById('${safeId_r}')">Renew</button>
         <button class="btn btn-sm" style="background:#FFF0F0;color:#E74C3C" onclick="delMember('${safeId_r}','${safeName_r.replace(/'/g,"\\'")}')">🗑️</button>
       </div>
@@ -2918,6 +2920,30 @@ async function deletePayment(memberId, groupId) {
       }
     } catch(e) { toast('Network error', 'error'); }
   });
+}
+async function markMemberInactive(id, name) {
+  if (!confirm(`Mark ${name} as Inactive?\nThis will immediately hide them from the Dashboard and Due Payments lists.`)) return;
+  
+  try {
+    // Sending a PUT request with only the status field to safely perform a partial update
+    const res = await fetch(`${API}/${id}`, {
+      method: 'PUT',
+      headers: hdrs(),
+      body: JSON.stringify({ status: 'Inactive' })
+    });
+    
+    if (res.ok) {
+      toast(`${name} marked as Inactive`, 'success');
+      loadDashboard();
+      loadPayments();
+      loadAllMembers();
+    } else {
+      const err = await res.json();
+      toast(err.error || 'Failed to update status', 'error');
+    }
+  } catch (err) {
+    toast('Network error', 'error');
+  }
 }
 async function goBackFromPayment() {
   if (!curPayMember || !curPayMember.isNew) return;
