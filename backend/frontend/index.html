@@ -1180,6 +1180,24 @@
       <span class="mtitle">💳 Renew Plan</span>
       <button class="mclose" onclick="cancelPayment()">✕</button>
     </div>
+    <!-- ═══════════════════ RECEIPT OPTIONS MODAL ═══════════════════ -->
+<div class="modal" id="receiptModal">
+  <div class="mbox" style="max-width:340px; text-align:center">
+    <div class="mhdr">
+      <span class="mtitle">✅ Payment Successful</span>
+      <button class="mclose" onclick="closeModal('receiptModal')">✕</button>
+    </div>
+    <div style="font-size:3.5rem; margin-bottom:10px; line-height:1">🎉</div>
+    <h3 id="receiptMemberName" style="font-size:1.2rem; font-weight:800; color:var(--tx); margin-bottom:4px"></h3>
+    <p id="receiptDetails" style="font-size:.85rem; color:var(--tx3); font-weight:600; margin-bottom:20px; line-height:1.4"></p>
+    
+    <div style="display:flex; flex-direction:column; gap:10px">
+      <button class="btn btn-success btn-full" id="btnShareWa" style="font-size:.95rem; min-height:48px">💬 Share via WhatsApp</button>
+      <button class="btn btn-primary btn-full" id="btnPrintReceipt" style="font-size:.95rem; min-height:48px; background:#4A6464">🖨️ Print Receipt</button>
+      <button class="btn btn-ghost btn-full" onclick="closeModal('receiptModal')" style="font-size:.95rem; min-height:48px">Done</button>
+    </div>
+  </div>
+</div>
 
     <!-- Change Plan -->
     <div class="form-group" id="payPlanRow">
