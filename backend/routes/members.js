@@ -182,30 +182,24 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// NEW: Delete specific payment from history
-router.delete('/:id/payment/:groupId', async (req, res) => {
+// NEW: Clear pending amount & cleanup zombie members
+router.delete('/:id/pending', async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
     const member = await Member.findOne({ where: { id: req.params.id, userId: gymId } });
     if (!member) return res.status(404).json({ error: 'Member not found' });
 
+    member.pendingAmount = 0;
     const history = member.paymentHistory || [];
-    const filteredHistory = history.filter(p => p.groupId !== req.params.groupId && p.receiptNo !== req.params.groupId);
 
-    if (history.length === filteredHistory.length) {
-      return res.status(404).json({ error: 'Payment not found' });
-    }
-
-    member.paymentHistory = filteredHistory;
-    
-    // If a soft-deleted member has their last remaining payment deleted, hard delete them to clean up
-    if (member.isDeleted && filteredHistory.length === 0) {
+    // If this member was soft-deleted and now has no debt and no history, wipe them out completely
+    if (member.isDeleted && history.length === 0) {
       await member.destroy();
     } else {
       await member.save();
     }
-    
-    res.json({ message: 'Payment deleted successfully', paymentHistory: filteredHistory });
+
+    res.json({ message: 'Pending amount cleared' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
