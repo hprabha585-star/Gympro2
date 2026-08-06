@@ -2355,9 +2355,9 @@ async function loadRevenuePage() {
         </div>
       </div>
       
-      <div style="background:#fff;border:1px solid #E0ECEC;border-radius:14px;padding:14px;margin-top:12px">
+<div style="background:#fff;border:1px solid #E0ECEC;border-radius:14px;padding:14px;margin-top:12px">
         <div style="font-size:.7rem;font-weight:800;color:#8AABAB;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Payment History (All Time)</div>
-        ${members.filter(m => (m.paymentHistory || []).length || Number(m.pendingAmount) > 0).map(m => {
+        ${members.filter(m => (m.paymentHistory || []).length > 0 || (!m.isDeleted && Number(m.pendingAmount) > 0)).map(m => {
           const history = m.paymentHistory || [];
           const pendingBreakdown = getPendingBreakdown(m);
           const hasPending = Number(m.pendingAmount) > 0;
@@ -2367,7 +2367,7 @@ async function loadRevenuePage() {
                 <span style="font-weight:700;font-size:.82rem;color:#1A2E2E">${esc(m.name)} ${m.isDeleted ? '<span style="color:#E74C3C;font-size:0.65rem">(Deleted)</span>' : ''}</span>
                 <span style="font-size:.65rem;font-weight:800;background:#1A8C8C;color:#fff;padding:1px 7px;border-radius:8px">ID #${m.memberNo||'-'}</span>
               </div>
-${groupPaymentEntries(history).map(tx => `
+              ${groupPaymentEntries(history).map(tx => `
                 <div style="padding:4px 0;padding-left:12px;border-bottom:1px dashed #F0F5F5;position:relative;">
                   ${tx.categories.map(c => `
                     <div style="display:flex;justify-content:space-between;font-size:.7rem;color:#4A6464;padding:1px 0;padding-right:85px;">
@@ -2387,13 +2387,17 @@ ${groupPaymentEntries(history).map(tx => `
                 </div>
               `).join('')}
               ${pendingBreakdown ? `
-                <div style="background:#FEECEB;border-radius:8px;padding:6px 10px;margin:6px 0 2px 12px">
+                <div style="background:#FEECEB;border-radius:8px;padding:6px 10px;margin:6px 0 2px 12px;position:relative;">
                   ${history.length ? `<div style="font-size:.65rem;font-weight:700;color:#27AE60;margin-bottom:3px">✅ ₹${history.reduce((s,p)=>s+(p.amount||0),0).toLocaleString('en-IN')} paid so far</div>` : ''}
-                  <div style="font-size:.65rem;font-weight:800;color:#E74C3C">
+                  <div style="font-size:.65rem;font-weight:800;color:#E74C3C;padding-right:85px;">
                     ⚠️ ₹${Number(m.pendingAmount).toLocaleString('en-IN')} pending
                     ${[pendingBreakdown.plan > 0 ? 'Plan' : '', pendingBreakdown.admission > 0 ? 'Admission' : '', pendingBreakdown.pt > 0 ? 'PT' : ''].filter(Boolean).length
                       ? ` (${[pendingBreakdown.plan > 0 ? 'Plan' : '', pendingBreakdown.admission > 0 ? 'Admission' : '', pendingBreakdown.pt > 0 ? 'PT' : ''].filter(Boolean).join(', ')})`
                       : ''}
+                  </div>
+                  <div style="position:absolute; right:0; top:50%; transform:translateY(-50%); display:flex; gap:6px;">
+                    <button onclick="showReceiptOptions('${m._id}', '${esc(m.name.replace(/'/g, "\\'"))}', 0, ${m.pendingAmount}, 'Pending', '')" style="background:#FFF9C4; color:#D97706; border:1px solid #FDE68A; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Print Due Slip">📄</button>
+                    <button onclick="clearPendingAmount('${m._id}')" style="background:#FFF0F0; color:#E74C3C; border:1px solid #FECDD5; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Clear Pending Balance">🗑️</button>
                   </div>
                 </div>
               ` : ''}
@@ -2932,6 +2936,24 @@ async function deletePayment(memberId, groupId) {
       } else {
         const data = await res.json();
         toast(data.error || 'Failed to delete payment', 'error');
+      }
+    } catch(e) { toast('Network error', 'error'); }
+  });
+}
+async function clearPendingAmount(memberId) {
+  doubleConfirm('Clear this pending balance? This will set the due amount to ₹0.', async () => {
+    try {
+      const res = await fetch(`${API}/${memberId}`, {
+        method: 'PUT', headers: hdrs(),
+        body: JSON.stringify({ pendingAmount: 0 })
+      });
+      if (res.ok) {
+        toast('Pending balance cleared', 'success');
+        loadRevenuePage();
+        loadPayments();
+      } else {
+        const data = await res.json();
+        toast(data.error || 'Failed to clear balance', 'error');
       }
     } catch(e) { toast('Network error', 'error'); }
   });
