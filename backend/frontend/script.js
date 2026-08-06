@@ -3113,7 +3113,7 @@ async function confirmPayment() {
       const dueName = curPayMember.name, dueId = curPayMember.id;
       curPayMember = null; curPayMethod = null;
       loadDashboard(); loadAllMembers(); loadPayments();
-      shareReceiptFor(dueId, dueName, received, remainingDue, method, receiptForShare);
+      showReceiptOptions(dueId, dueName, received, remainingDue, method, receiptForShare);
     } catch (e) {
       toast(`❌ ${e.message || 'Network error — check connection'}`, 'error');
     }
@@ -3180,7 +3180,7 @@ async function confirmPayment() {
     curPayMember = null; curPayMethod = null;
     loadDashboard(); loadAllMembers();
     if (btn) { btn.disabled = false; btn.textContent = '✅ Confirm Payment'; }
-    if (addedMemberForReceipt) shareReceiptFor(addedMemberForReceipt.id, addedMemberForReceipt.name, receivedNew, pendingNew, method, entries[0]?.receiptNo);
+    if (addedMemberForReceipt) showReceiptOptions(addedMemberForReceipt.id, addedMemberForReceipt.name, receivedNew, pendingNew, method, entries[0]?.receiptNo);
     return;
   }
 
@@ -3280,7 +3280,7 @@ async function confirmPayment() {
     const renewedName = curPayMember.name, renewedId = curPayMember.id;
     curPayMember = null; curPayMethod = null;
     loadDashboard(); loadPayments(); loadAllMembers();
-    shareReceiptFor(renewedId, renewedName, receivedRenew, pendingRenew, method, renewEntries[0]?.receiptNo);
+    showReceiptOptions(renewedId, renewedName, receivedRenew, pendingRenew, method, renewEntries[0]?.receiptNo);
   } catch(e) {
     toast(`❌ ${e.message || 'Network error — check connection'}`, 'error');
     if (btn) { btn.disabled = false; btn.textContent = '✅ Confirm Payment'; }
@@ -3519,6 +3519,91 @@ Method: *${methodLabel}*`;
     console.error('Receipt share failed', e);
   }
 }
+/* Show the Success Modal to choose between Print or WhatsApp */
+function showReceiptOptions(memberId, name, amountReceived, pendingAmount, method, receiptNo) {
+  const modal = document.getElementById('receiptModal');
+  if (!modal) return;
+  
+  document.getElementById('receiptMemberName').textContent = name;
+  document.getElementById('receiptDetails').innerHTML = `Amount Paid: ₹${Number(amountReceived).toLocaleString('en-IN')}<br>Receipt: ${receiptNo || 'N/A'}`;
+  
+  const btnShare = document.getElementById('btnShareWa');
+  const btnPrint = document.getElementById('btnPrintReceipt');
+  
+  btnShare.onclick = () => {
+    shareReceiptFor(memberId, name, amountReceived, pendingAmount, method, receiptNo);
+    closeModal('receiptModal');
+  };
+  
+  btnPrint.onclick = () => {
+    printReceipt(name, amountReceived, pendingAmount, method, receiptNo);
+    closeModal('receiptModal');
+  };
+  
+  openModal('receiptModal');
+}
+
+/* Generates a thermal-printer friendly receipt and opens print dialog */
+function printReceipt(name, amountReceived, pendingAmount, method, receiptNo) {
+  const gymName = getGymName();
+  const dateStr = new Date().toLocaleDateString('en-IN') + ' ' + new Date().toLocaleTimeString('en-IN', {hour: '2-digit', minute:'2-digit'});
+  const methodLabel = { upi:'UPI', cash:'Cash', card:'Card', split:'Split' }[method] || method;
+  
+  const printWindow = window.open('', '_blank', 'width=400,height=600');
+  if (!printWindow) {
+    toast('Pop-up blocked! Please allow pop-ups to print.', 'error');
+    return;
+  }
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Receipt - ${receiptNo || 'GymPro'}</title>
+      <style>
+        body { font-family: 'Courier New', Courier, monospace; padding: 20px; max-width: 300px; margin: 0 auto; color: #000; }
+        .center { text-align: center; }
+        h2 { margin: 0 0 5px 0; font-size: 1.3rem; }
+        .divider { border-bottom: 1px dashed #000; margin: 12px 0; }
+        .row { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px; }
+        .bold { font-weight: bold; }
+        @media print {
+          @page { margin: 0; }
+          body { padding: 10px; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="center">
+        <h2>${esc(gymName)}</h2>
+        <div style="font-size:0.8rem; margin-bottom:10px">${dateStr}</div>
+      </div>
+      <div class="divider"></div>
+      <div class="row"><span>Receipt No:</span> <span class="bold">${esc(receiptNo || 'N/A')}</span></div>
+      <div class="row"><span>Member:</span> <span class="bold">${esc(name)}</span></div>
+      <div class="divider"></div>
+      <div class="row"><span>Amount Paid:</span> <span class="bold">Rs. ${Number(amountReceived).toLocaleString('en-IN')}</span></div>
+      <div class="row"><span>Method:</span> <span>${esc(methodLabel)}</span></div>
+      ${pendingAmount > 0 
+        ? `<div class="row" style="margin-top:10px"><span>Pending Due:</span> <span class="bold">Rs. ${Number(pendingAmount).toLocaleString('en-IN')}</span></div>` 
+        : `<div class="row" style="margin-top:10px"><span>Status:</span> <span class="bold">Fully Paid</span></div>`}
+      <div class="divider"></div>
+      <div class="center" style="font-size:0.8rem; margin-top:20px">Thank you!</div>
+      
+      <script>
+        window.onload = () => { 
+          window.print(); 
+          setTimeout(() => window.close(), 500); 
+        }
+      </script>
+    </body>
+    </html>
+  `;
+  
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
 
 /* Manually re-share the receipt for a member's most recent payment
    (e.g. from a "📄 Receipt" button on their card). */
@@ -3529,7 +3614,7 @@ function shareLastReceipt(memberId) {
     return;
   }
   const last = [...m.paymentHistory].sort((a,b) => new Date(b.date) - new Date(a.date))[0];
-  shareReceiptFor(memberId, m.name, last.amount, m.pendingAmount || 0, last.method, last.receiptNo);
+  showReceiptOptions(memberId, m.name, last.amount, m.pendingAmount || 0, last.method, last.receiptNo);
 }
 
 async function sendPaymentReminder(memberId, phone, name) {
