@@ -806,7 +806,7 @@ function _fillExtraDashTiles(members) {
     return new Date(+y, +mo - 1, +d);
   };
   const daysLeft = m => Math.ceil((parseExp(m) - today) / 86400000);
-  const active = members.filter(m => m.status === 'Active' || m.status === 'Trial');
+  const active = members.filter(m => !m.isDeleted && (m.status === 'Active' || m.status === 'Trial'));
 
   const el = id => document.getElementById(id);
   if (el('statExpToday')) el('statExpToday').textContent = active.filter(m => daysLeft(m) === 0).length;
@@ -822,14 +822,16 @@ async function loadDashboard() {
     const res = await fetch(API, {headers:hdrs()});
     if (res.status===401) { logout(); return; }
     const members = await res.json();
-    const sorted = sortByExpiry(members);
-    allMembersCache = members;
+    const activeMembers = members.filter(m => !m.isDeleted); // Exclude deleted from lists
+    const sorted = sortByExpiry(activeMembers);
+    allMembersCache = members; // Retain all (including deleted) for revenue calc
 
     const totalEl = document.getElementById('statTotal');
     const activeEl = document.getElementById('statActive');
-    if (totalEl) totalEl.textContent = members.length;
-    if (activeEl) activeEl.textContent = members.filter(m=>m.status==='Active').length;
+    if (totalEl) totalEl.textContent = activeMembers.length;
+    if (activeEl) activeEl.textContent = activeMembers.filter(m=>m.status==='Active').length;
 
+    // NOTE: Passing 'members' (all) so deleted revenue counts
     const revenue = calculateRevenue(members);
     renderRevenueDashboard(revenue);
 
@@ -844,7 +846,7 @@ async function loadDashboard() {
     in7Days.setDate(today.getDate() + 7);
     in7Days.setHours(23,59,59,999);
 
-    const due = members.filter(m => {
+    const due = activeMembers.filter(m => { // Filter activeMembers instead
       if(m.status !== 'Active') return false;
       const p = m.expiryDate.split('T')[0].split('-');
       const exp = new Date(p[0], p[1]-1, p[2]);
@@ -963,7 +965,7 @@ function _renderMemberCard(m, idx) {
 }
 
 function _applyMembersFilters() {
-  let list = allMembersCache;
+  let list = allMembersCache.filter(m => !m.isDeleted);
   if (_memberStatusFilter !== 'all')
     list = list.filter(m => m.status === _memberStatusFilter);
   if (_memberSearchQuery)
@@ -2140,7 +2142,7 @@ function _renderPaymentsList() {
   const container = document.getElementById('payList');
   if (!container) return;
   
-  let members = allMembersCache;
+  let members = allMembersCache.filter(m => !m.isDeleted);
   
   // Apply Search Filter
   if (_paymentSearchQuery) {
@@ -2359,19 +2361,26 @@ async function loadRevenuePage() {
           const hasPending = Number(m.pendingAmount) > 0;
           return `
             <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #F0F5F5">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
-                <span style="font-weight:700;font-size:.82rem;color:#1A2E2E">${esc(m.name)}</span>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+                <span style="font-weight:700;font-size:.82rem;color:#1A2E2E">${esc(m.name)} ${m.isDeleted ? '<span style="color:#E74C3C;font-size:0.65rem">(Deleted)</span>' : ''}</span>
                 <span style="font-size:.65rem;font-weight:800;background:#1A8C8C;color:#fff;padding:1px 7px;border-radius:8px">ID #${m.memberNo||'-'}</span>
               </div>
               ${!hasPending ? groupPaymentEntries(history).map(tx => `
-                <div style="padding:4px 0;padding-left:12px;border-bottom:1px dashed #F0F5F5">
+                <div style="padding:4px 0;padding-left:12px;border-bottom:1px dashed #F0F5F5;position:relative;">
                   ${tx.categories.map(c => `
-                    <div style="display:flex;justify-content:space-between;font-size:.7rem;color:#4A6464;padding:1px 0">
+                    <div style="display:flex;justify-content:space-between;font-size:.7rem;color:#4A6464;padding:1px 0;padding-right:36px;">
                       <span>₹${c.amount.toLocaleString('en-IN')}</span>
                       <span style="font-size:.6rem;color:#8AABAB;text-transform:capitalize">${c.type}</span>
                       <span style="color:#27AE60;font-weight:600">Paid</span>
                     </div>
                   `).join('')}
+                  <div style="display:flex;justify-content:space-between;font-size:.65rem;color:#8AABAB;padding-top:2px;padding-right:36px;">
+                    <span>${tx.date ? new Date(tx.date).toLocaleDateString('en-IN') : '—'}</span>
+                    <span style="font-weight:700;color:#1A8C8C">${tx.methodSummary}</span>
+                  </div>
+                  <button onclick="deletePayment('${m._id}', '${tx.groupId}')" style="position:absolute; right:0; top:50%; transform:translateY(-50%); background:#FFF0F0; color:#E74C3C; border:1px solid #FECDD5; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;">🗑️</button>
+                </div>
+              `).join('') : ''}
                   <div style="display:flex;justify-content:space-between;font-size:.65rem;color:#8AABAB;padding-top:2px">
                     <span>${tx.date ? new Date(tx.date).toLocaleDateString('en-IN') : '—'}</span>
                     <span style="font-weight:700;color:#1A8C8C">${tx.methodSummary}</span>
@@ -2456,6 +2465,7 @@ function groupPaymentEntries(history) {
     if (g.cashTotal > 0) parts.push(`Cash ₹${g.cashTotal.toLocaleString('en-IN')}`);
     if (g.otherTotal > 0) parts.push(`Card ₹${g.otherTotal.toLocaleString('en-IN')}`);
     return {
+      groupId: key, // <--- ADD THIS LINE HERE
       date: g.date,
       categories: Object.entries(g.categories).map(([type, amount]) => ({ type, amount })),
       methodSummary: parts.join(' + ') || 'Paid'
@@ -2898,6 +2908,23 @@ async function cancelPayment() {
   curPayMethod = null;
   closeModal('paymentModal');
 }
+async function deletePayment(memberId, groupId) {
+  doubleConfirm('Delete this payment record? This will update your revenue calculations permanently.', async () => {
+    try {
+      const res = await fetch(`${API}/${memberId}/payment/${groupId}`, {
+        method: 'DELETE', headers: hdrs()
+      });
+      if (res.ok) {
+        toast('Payment removed', 'success');
+        loadRevenuePage();
+        loadDashboard(); // Refreshes stats
+      } else {
+        const data = await res.json();
+        toast(data.error || 'Failed to delete payment', 'error');
+      }
+    } catch(e) { toast('Network error', 'error'); }
+  });
+}
 async function goBackFromPayment() {
   if (!curPayMember || !curPayMember.isNew) return;
   
@@ -3306,7 +3333,7 @@ async function loadPtBlock() {
 
     // Group PT members by trainer
     const groups = {};
-    members.forEach(m => {
+    members.filter(m => !m.isDeleted).forEach(m => {
       if (!m.ptEnabled || !m.ptTrainer) return;
       const tid = m.ptTrainer;
       if (!groups[tid]) groups[tid] = { tname: trainerMap[tid] || 'Unknown Trainer', members: [] };
