@@ -156,6 +156,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete member
+// Delete member (Soft delete to preserve revenue history)
 router.delete('/:id', async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
@@ -163,8 +164,48 @@ router.delete('/:id', async (req, res) => {
     if (!member) return res.status(404).json({ error: 'Member not found' });
 
     await Attendance.destroy({ where: { userId: gymId, memberId: req.params.id } });
-    await member.destroy();
+
+    const history = member.paymentHistory || [];
+    if (history.length > 0 || Number(member.pendingAmount) > 0) {
+      // Soft delete: keep row for revenue, mark as deleted, alter phone to free it up
+      member.isDeleted = true;
+      member.phone = member.phone + '_del_' + Date.now();
+      member.status = 'Inactive';
+      await member.save();
+    } else {
+      // Hard delete: no financial records tied to this member
+      await member.destroy();
+    }
     res.json({ message: 'Member deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// NEW: Delete specific payment from history
+router.delete('/:id/payment/:groupId', async (req, res) => {
+  try {
+    const gymId = req.user.gymId || req.user.userId;
+    const member = await Member.findOne({ where: { id: req.params.id, userId: gymId } });
+    if (!member) return res.status(404).json({ error: 'Member not found' });
+
+    const history = member.paymentHistory || [];
+    const filteredHistory = history.filter(p => p.groupId !== req.params.groupId && p.receiptNo !== req.params.groupId);
+
+    if (history.length === filteredHistory.length) {
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    member.paymentHistory = filteredHistory;
+    
+    // If a soft-deleted member has their last remaining payment deleted, hard delete them to clean up
+    if (member.isDeleted && filteredHistory.length === 0 && Number(member.pendingAmount) <= 0) {
+      await member.destroy();
+    } else {
+      await member.save();
+    }
+    
+    res.json({ message: 'Payment deleted successfully', paymentHistory: filteredHistory });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
