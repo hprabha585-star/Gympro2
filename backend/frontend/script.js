@@ -2367,20 +2367,23 @@ async function loadRevenuePage() {
                 <span style="font-weight:700;font-size:.82rem;color:#1A2E2E">${esc(m.name)} ${m.isDeleted ? '<span style="color:#E74C3C;font-size:0.65rem">(Deleted)</span>' : ''}</span>
                 <span style="font-size:.65rem;font-weight:800;background:#1A8C8C;color:#fff;padding:1px 7px;border-radius:8px">ID #${m.memberNo||'-'}</span>
               </div>
-              ${!hasPending ? groupPaymentEntries(history).map(tx => `
+${!hasPending ? groupPaymentEntries(history).map(tx => `
                 <div style="padding:4px 0;padding-left:12px;border-bottom:1px dashed #F0F5F5;position:relative;">
                   ${tx.categories.map(c => `
-                    <div style="display:flex;justify-content:space-between;font-size:.7rem;color:#4A6464;padding:1px 0;padding-right:36px;">
+                    <div style="display:flex;justify-content:space-between;font-size:.7rem;color:#4A6464;padding:1px 0;padding-right:85px;">
                       <span>₹${c.amount.toLocaleString('en-IN')}</span>
                       <span style="font-size:.6rem;color:#8AABAB;text-transform:capitalize">${c.type}</span>
                       <span style="color:#27AE60;font-weight:600">Paid</span>
                     </div>
                   `).join('')}
-                  <div style="display:flex;justify-content:space-between;font-size:.65rem;color:#8AABAB;padding-top:2px;padding-right:36px;">
+                  <div style="display:flex;justify-content:space-between;font-size:.65rem;color:#8AABAB;padding-top:2px;padding-right:85px;">
                     <span>${tx.date ? new Date(tx.date).toLocaleDateString('en-IN') : '—'}</span>
                     <span style="font-weight:700;color:#1A8C8C">${tx.methodSummary}</span>
                   </div>
-                  <button onclick="deletePayment('${m._id}', '${tx.groupId}')" style="position:absolute; right:0; top:50%; transform:translateY(-50%); background:#FFF0F0; color:#E74C3C; border:1px solid #FECDD5; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;">🗑️</button>
+                  <div style="position:absolute; right:0; top:50%; transform:translateY(-50%); display:flex; gap:6px;">
+                    <button onclick="showReceiptOptions('${m._id}', '${esc(m.name.replace(/'/g, "\\'"))}', ${tx.totalAmount}, 0, '${tx.rawMethod}', '${tx.receiptNo || ''}')" style="background:#E8F8EF; color:#27AE60; border:1px solid #A8E6C0; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="View Receipt">📄</button>
+                    <button onclick="deletePayment('${m._id}', '${tx.groupId}')" style="background:#FFF0F0; color:#E74C3C; border:1px solid #FECDD5; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Delete Payment">🗑️</button>
+                  </div>
                 </div>
               `).join('') : ''}
               ${pendingBreakdown ? `
@@ -2445,7 +2448,7 @@ function groupPaymentEntries(history) {
   const order = [];
   history.forEach((p, i) => {
     const key = p.groupId || `single-${i}`;
-    if (!tx[key]) { tx[key] = { date: p.date, categories: {}, upiTotal: 0, cashTotal: 0, otherTotal: 0 }; order.push(key); }
+    if (!tx[key]) { tx[key] = { date: p.date, categories: {}, upiTotal: 0, cashTotal: 0, otherTotal: 0, receiptNo: p.receiptNo }; order.push(key); }
     const g = tx[key];
     const type = p.type || 'plan';
     g.categories[type] = (g.categories[type] || 0) + (p.amount || 0);
@@ -2460,11 +2463,23 @@ function groupPaymentEntries(history) {
     if (g.upiTotal > 0) parts.push(`UPI ₹${g.upiTotal.toLocaleString('en-IN')}`);
     if (g.cashTotal > 0) parts.push(`Cash ₹${g.cashTotal.toLocaleString('en-IN')}`);
     if (g.otherTotal > 0) parts.push(`Card ₹${g.otherTotal.toLocaleString('en-IN')}`);
+    
+    // Determine the raw method to pass into the receipt system
+    let rawMethod = 'cash';
+    if (g.upiTotal > 0 && g.cashTotal > 0) rawMethod = 'split';
+    else if (g.upiTotal > 0) rawMethod = 'upi';
+    else if (g.otherTotal > 0) rawMethod = 'card';
+    
+    const totalAmount = g.upiTotal + g.cashTotal + g.otherTotal;
+
     return {
-      groupId: key, // <--- ADD THIS LINE HERE
+      groupId: key, 
       date: g.date,
       categories: Object.entries(g.categories).map(([type, amount]) => ({ type, amount })),
-      methodSummary: parts.join(' + ') || 'Paid'
+      methodSummary: parts.join(' + ') || 'Paid',
+      rawMethod: rawMethod,
+      receiptNo: g.receiptNo,
+      totalAmount: totalAmount
     };
   });
 }
