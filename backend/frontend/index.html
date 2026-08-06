@@ -469,8 +469,17 @@
     <div id="discTable"></div>
   </div>
 
-  <!-- ──────────────── PAYMENTS ──────────────── -->
+<!-- ──────────────── PAYMENTS ──────────────── -->
   <div id="page-payments" class="page">
+    <div style="position:relative;margin-bottom:10px">
+      <input type="search" id="paymentSearch"
+        placeholder='Search Name, Phone or ID #'
+        oninput="filterPayments()"
+        inputmode="search"
+        style="width:100%;padding:11px 46px 11px 14px;background:#fff;border:1.5px solid #D5D5DF;border-radius:22px;font-family:inherit;font-size:.88rem;font-weight:500;color:#1A2E2E;-webkit-appearance:none;appearance:none;transition:border-color .2s">
+      <button onclick="filterPayments()"
+        style="position:absolute;right:4px;top:4px;bottom:4px;background:#1A8C8C;color:#fff;border:none;border-radius:18px;padding:0 14px;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer">🔍</button>
+    </div>
     <div class="card">
       <div class="card-head"><span class="card-title">Due Payments</span></div>
       <div id="payList">
