@@ -2381,23 +2381,16 @@ async function loadRevenuePage() {
                     <span style="font-weight:700;color:#1A8C8C">${tx.methodSummary}</span>
                   </div>
                   <div style="position:absolute; right:0; top:50%; transform:translateY(-50%); display:flex; gap:6px;">
-                    <button onclick="showReceiptOptions('${m._id}', '${esc(m.name.replace(/'/g, "\\'"))}', ${history.reduce((s,p)=>s+(p.amount||0),0)}, ${m.pendingAmount}, 'Partial Paid', '')" style="background:#FFF9C4; color:#D97706; border:1px solid #FDE68A; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Print Due Slip">📄</button>
-                    <button onclick="clearPendingAmount('${m._id}')" style="background:#FFF0F0; color:#E74C3C; border:1px solid #FECDD5; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Clear Pending Balance">🗑️</button>
+                    <button onclick="showReceiptOptions('${m._id}', '${esc(m.name.replace(/'/g, "\\'"))}', ${history.reduce((s,p)=>s+(p.amount||0),0)}, ${m.pendingAmount}, 'Partial Paid', '${jsEsc(tx.receiptNo || '')}')" style="background:#FFF9C4; color:#D97706; border:1px solid #FDE68A; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Print Due Slip">📄</button>
+                    <button onclick="deletePayment('${m._id}', '${tx.groupId}')" style="background:#FFF0F0; color:#E74C3C; border:1px solid #FECDD5; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Delete this payment record">🗑️</button>
                   </div>
                 </div>
               `).join('')}
 ${pendingBreakdown ? (() => {
                 const totalPaid = history.reduce((s,p) => s + (Number(p.amount) || 0), 0);
                 const pendingAmt = Number(m.pendingAmount) || 0;
-                
-                // Safely grab the receipt number, or explicitly generate a fallback if the old history didn't record one
-                let latestReceipt = '';
-                if (history.length > 0 && history[history.length - 1].receiptNo) {
-                  latestReceipt = history[history.length - 1].receiptNo;
-                }
-                if (!latestReceipt) {
-                  latestReceipt = 'REC-' + (m.memberNo || String(Date.now()).slice(-6));
-                }
+                const latestReceipt = history.length > 0 ? history[history.length - 1].receiptNo : ('REC-' + (m.memberNo || Date.now().toString().slice(-6)));
+                const isEmptyHistory = history.length === 0;
                 
                 return `
                 <div style="background:#FEECEB;border-radius:8px;padding:6px 10px;margin:6px 0 2px 12px;position:relative;">
@@ -2410,7 +2403,7 @@ ${pendingBreakdown ? (() => {
                   </div>
                   <div style="position:absolute; right:0; top:50%; transform:translateY(-50%); display:flex; gap:6px;">
                     <button onclick="showReceiptOptions('${m._id}', '${esc(m.name.replace(/'/g, "\\'"))}', ${totalPaid}, ${pendingAmt}, 'Partial Payment', '${latestReceipt}')" style="background:#FFF9C4; color:#D97706; border:1px solid #FDE68A; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Print Due Slip">📄</button>
-                    <button onclick="clearPendingAmount('${m._id}')" style="background:#FFF0F0; color:#E74C3C; border:1px solid #FECDD5; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Clear Pending Balance">🗑️</button>
+                    <button onclick="clearPendingAmount('${m._id}', ${isEmptyHistory})" style="background:#FFF0F0; color:#E74C3C; border:1px solid #FECDD5; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Clear Pending Balance">🗑️</button>
                   </div>
                 </div>
               `})() : ''}
@@ -2953,22 +2946,24 @@ async function deletePayment(memberId, groupId) {
     } catch(e) { toast('Network error', 'error'); }
   });
 }
-async function clearPendingAmount(memberId) {
+async function clearPendingAmount(memberId, isEmptyHistory) {
   doubleConfirm('Clear this pending balance? This will set the due amount to ₹0.', async () => {
     try {
-      const res = await fetch(`${API}/${memberId}`, {
+      // 1. Clear the pending balance
+      await fetch(`${API}/${memberId}`, {
         method: 'PUT', headers: hdrs(),
         body: JSON.stringify({ pendingAmount: 0 })
       });
       
-      if (res.ok) {
-        toast('Pending balance cleared', 'success');
-        loadRevenuePage();
-        loadPayments();
-      } else {
-        const data = await res.json();
-        toast(data.error || 'Failed to clear balance', 'error');
+      // 2. If they have no payment history at all, trigger a hard delete
+      // so the "zombie" member completely disappears from the revenue page.
+      if (isEmptyHistory) {
+        await fetch(`${API}/${memberId}`, { method: 'DELETE', headers: hdrs() });
       }
+      
+      toast('Pending balance cleared', 'success');
+      loadRevenuePage();
+      loadPayments();
     } catch(e) { toast('Network error', 'error'); }
   });
 }
