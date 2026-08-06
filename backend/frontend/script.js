@@ -2367,7 +2367,7 @@ async function loadRevenuePage() {
                 <span style="font-weight:700;font-size:.82rem;color:#1A2E2E">${esc(m.name)} ${m.isDeleted ? '<span style="color:#E74C3C;font-size:0.65rem">(Deleted)</span>' : ''}</span>
                 <span style="font-size:.65rem;font-weight:800;background:#1A8C8C;color:#fff;padding:1px 7px;border-radius:8px">ID #${m.memberNo||'-'}</span>
               </div>
-${!hasPending ? groupPaymentEntries(history).map(tx => `
+${groupPaymentEntries(history).map(tx => `
                 <div style="padding:4px 0;padding-left:12px;border-bottom:1px dashed #F0F5F5;position:relative;">
                   ${tx.categories.map(c => `
                     <div style="display:flex;justify-content:space-between;font-size:.7rem;color:#4A6464;padding:1px 0;padding-right:85px;">
@@ -2381,11 +2381,11 @@ ${!hasPending ? groupPaymentEntries(history).map(tx => `
                     <span style="font-weight:700;color:#1A8C8C">${tx.methodSummary}</span>
                   </div>
                   <div style="position:absolute; right:0; top:50%; transform:translateY(-50%); display:flex; gap:6px;">
-                    <button onclick="showReceiptOptions('${m._id}', '${esc(m.name.replace(/'/g, "\\'"))}', ${tx.totalAmount}, 0, '${tx.rawMethod}', '${tx.receiptNo || ''}')" style="background:#E8F8EF; color:#27AE60; border:1px solid #A8E6C0; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="View Receipt">📄</button>
+                    <button onclick="showReceiptOptions('${m._id}', '${esc(m.name.replace(/'/g, "\\'"))}', ${tx.totalAmount}, ${m.pendingAmount || 0}, '${tx.rawMethod}', '${tx.receiptNo || ''}')" style="background:#E8F8EF; color:#27AE60; border:1px solid #A8E6C0; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="View Receipt">📄</button>
                     <button onclick="deletePayment('${m._id}', '${tx.groupId}')" style="background:#FFF0F0; color:#E74C3C; border:1px solid #FECDD5; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Delete Payment">🗑️</button>
                   </div>
                 </div>
-              `).join('') : ''}
+              `).join('')}
               ${pendingBreakdown ? `
                 <div style="background:#FEECEB;border-radius:8px;padding:6px 10px;margin:6px 0 2px 12px">
                   ${history.length ? `<div style="font-size:.65rem;font-weight:700;color:#27AE60;margin-bottom:3px">✅ ₹${history.reduce((s,p)=>s+(p.amount||0),0).toLocaleString('en-IN')} paid so far</div>` : ''}
