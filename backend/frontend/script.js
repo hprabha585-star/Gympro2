@@ -2381,8 +2381,8 @@ async function loadRevenuePage() {
                     <span style="font-weight:700;color:#1A8C8C">${tx.methodSummary}</span>
                   </div>
                   <div style="position:absolute; right:0; top:50%; transform:translateY(-50%); display:flex; gap:6px;">
-                    <button onclick="showReceiptOptions('${m._id}', '${esc(m.name.replace(/'/g, "\\'"))}', ${tx.totalAmount}, ${m.pendingAmount || 0}, '${tx.rawMethod}', '${tx.receiptNo || ''}')" style="background:#E8F8EF; color:#27AE60; border:1px solid #A8E6C0; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="View Receipt">📄</button>
-                    <button onclick="deletePayment('${m._id}', '${tx.groupId}')" style="background:#FFF0F0; color:#E74C3C; border:1px solid #FECDD5; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Delete Payment">🗑️</button>
+                    <button onclick="showReceiptOptions('${m._id}', '${esc(m.name.replace(/'/g, "\\'"))}', ${history.reduce((s,p)=>s+(p.amount||0),0)}, ${m.pendingAmount}, 'Partial Paid', '')" style="background:#FFF9C4; color:#D97706; border:1px solid #FDE68A; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Print Due Slip">📄</button>
+                    <button onclick="clearPendingAmount('${m._id}')" style="background:#FFF0F0; color:#E74C3C; border:1px solid #FECDD5; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;" title="Clear Pending Balance">🗑️</button>
                   </div>
                 </div>
               `).join('')}
