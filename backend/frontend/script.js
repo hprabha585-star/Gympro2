@@ -2129,82 +2129,109 @@ function removeDiscount(i) {
 }
 
 /* ── PAYMENTS ── */
+let _paymentSearchQuery = '';
+
+function filterPayments() {
+  _paymentSearchQuery = (document.getElementById('paymentSearch')?.value || '').toLowerCase().trim();
+  _renderPaymentsList();
+}
+
+function _renderPaymentsList() {
+  const container = document.getElementById('payList');
+  if (!container) return;
+  
+  let members = allMembersCache;
+  
+  // Apply Search Filter
+  if (_paymentSearchQuery) {
+    members = members.filter(m => 
+      (m.name || '').toLowerCase().includes(_paymentSearchQuery) || 
+      (m.phone || '').includes(_paymentSearchQuery) || 
+      String(m.memberNo || '').includes(_paymentSearchQuery)
+    );
+  }
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const in14Days = new Date(today);
+  in14Days.setDate(today.getDate() + 14);
+  in14Days.setHours(23,59,59,999);
+
+  // ── Pending balances: members who paid less than the full amount ──
+  const pendingMembers = members.filter(m => Number(m.pendingAmount) > 0);
+  let pendingHtml = '';
+  if (pendingMembers.length) {
+    pendingHtml = `
+    <div style="margin-bottom:18px">
+      <div style="font-size:.72rem;font-weight:800;color:#E74C3C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">⚠️ Pending Payments (${pendingMembers.length})</div>
+      ${pendingMembers.map(m => {
+        const safePhone_p = esc(m.phone||'');
+        const safeId_p = esc(String(m._id||''));
+        const safeName_p = esc(m.name||'');
+        return `
+        <div class="pay-row" style="border:1.5px solid #FEECEB;background:#FFFBFB;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;align-items:center;gap:12px">${avImg(m)}<div><div style="font-weight:700;font-size:.85rem">${safeName_p}</div><div style="font-size:.72rem;color:var(--tx3)">${esc(m.plan||'')}</div></div></div>
+          <span class="badge" style="background:#FEECEB;color:#E74C3C;font-weight:800">Due ₹${Number(m.pendingAmount).toLocaleString('en-IN')}</span>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn btn-sm" style="background:#E3F2FD;color:#2980B9" onclick="dialPhone('${safePhone_p}')" title="Call">📞</button>
+            <button class="btn btn-sm" style="background:#FEF6E7;color:#F39C12" onclick="sendPaymentReminder('${safeId_p}','${safePhone_p}','${safeName_p}')" title="Send reminder">🔔</button>
+            <button class="btn btn-success btn-sm" onclick="openCollectDue('${safeId_p}')">💰 Receive</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  const due = members.filter(m => {
+    if(m.status !== 'Active') return false;
+    const p = m.expiryDate.split('T')[0].split('-');
+    const exp = new Date(p[0], p[1]-1, p[2]);
+    return exp <= in14Days;
+  });
+
+  due.sort((a,b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+
+  if(!due.length && !pendingMembers.length){
+    container.innerHTML = '<div class="empty"><div class="ei">✅</div><p>' + (_paymentSearchQuery ? 'No matching due payments found.' : 'No payments due in 14 days!') + '</p></div>';
+    return;
+  }
+  if (!due.length) {
+    container.innerHTML = pendingHtml + '<div class="empty"><div class="ei">✅</div><p>' + (_paymentSearchQuery ? 'No matching renewals found.' : 'No renewals due in 14 days!') + '</p></div>';
+    return;
+  }
+  
+  container.innerHTML = pendingHtml + due.map(m => {
+    const p = m.expiryDate.split('T')[0].split('-');
+    const expDate = new Date(p[0], p[1]-1, p[2]);
+    const d = Math.ceil((expDate - today)/86400000);
+    const safePhone_r = esc(m.phone||'');
+    const safeId_r = esc(String(m._id||''));
+    const safeName_r = esc(String(m.name||''));
+    return `<div class="pay-row" style="flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:12px">${avImg(m)}<div><div style="font-weight:700;font-size:.85rem">${esc(m.name)}</div><div style="font-size:.72rem;color:var(--tx3)">${esc(m.plan)}</div><div style="font-size:.7rem;color:var(--tx3)">Exp: ${fmt(m.expiryDate)}</div></div></div>
+      <span class="badge ${d<0?'b-inactive':'b-trial'}">${d<0?'Overdue':d+'d'}</span>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn-sm" style="background:#E3F2FD;color:#2980B9" onclick="dialPhone('${safePhone_r}')" title="Call">📞</button>
+        <button class="btn btn-sm" style="background:#FEF6E7;color:#F39C12" onclick="sendPaymentReminder('${safeId_r}','${safePhone_r}','${safeName_r}')" title="Send reminder">🔔</button>
+        <button class="btn btn-success btn-sm" onclick="openPaymentForById('${safeId_r}')">Renew</button>
+        <button class="btn btn-sm" style="background:#FFF0F0;color:#E74C3C" onclick="delMember('${safeId_r}','${safeName_r.replace(/'/g,"\\'")}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 async function loadPayments() {
   const container = document.getElementById('payList');
   if (!container) return;
+  container.innerHTML = '<div class="empty"><div class="ei">⏳</div><p>Loading…</p></div>';
   try {
     const res = await fetch(API,{headers:hdrs()});
     if(res.status===401){logout();return;}
     const members = await res.json();
     allMembersCache = members; // keep cache fresh for openPaymentForById
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const in14Days = new Date(today);
-    in14Days.setDate(today.getDate() + 14);
-    in14Days.setHours(23,59,59,999);
-
-    // ── Pending balances: members who paid less than the full amount ──
-    const pendingMembers = members.filter(m => Number(m.pendingAmount) > 0);
-    let pendingHtml = '';
-    if (pendingMembers.length) {
-      pendingHtml = `
-      <div style="margin-bottom:18px">
-        <div style="font-size:.72rem;font-weight:800;color:#E74C3C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">⚠️ Pending Payments (${pendingMembers.length})</div>
-        ${pendingMembers.map(m => {
-          const safePhone_p = esc(m.phone||'');
-          const safeId_p = esc(String(m._id||''));
-          const safeName_p = esc(m.name||'');
-          return `
-          <div class="pay-row" style="border:1.5px solid #FEECEB;background:#FFFBFB;flex-wrap:wrap;gap:8px">
-            <div style="display:flex;align-items:center;gap:12px">${avImg(m)}<div><div style="font-weight:700;font-size:.85rem">${safeName_p}</div><div style="font-size:.72rem;color:var(--tx3)">${esc(m.plan||'')}</div></div></div>
-            <span class="badge" style="background:#FEECEB;color:#E74C3C;font-weight:800">Due ₹${Number(m.pendingAmount).toLocaleString('en-IN')}</span>
-            <div style="display:flex;gap:6px;flex-shrink:0">
-              <button class="btn btn-sm" style="background:#E3F2FD;color:#2980B9" onclick="dialPhone('${safePhone_p}')" title="Call">📞</button>
-              <button class="btn btn-sm" style="background:#FEF6E7;color:#F39C12" onclick="sendPaymentReminder('${safeId_p}','${safePhone_p}','${safeName_p}')" title="Send reminder">🔔</button>
-              <button class="btn btn-success btn-sm" onclick="openCollectDue('${safeId_p}')">💰 Receive</button>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>`;
-    }
-
-    const due = members.filter(m => {
-      if(m.status !== 'Active') return false;
-      const p = m.expiryDate.split('T')[0].split('-');
-      const exp = new Date(p[0], p[1]-1, p[2]);
-      return exp <= in14Days;
-    });
-
-    due.sort((a,b) => new Date(a.expiryDate) - new Date(b.expiryDate));
-
-    if(!due.length && !pendingMembers.length){
-      container.innerHTML = '<div class="empty"><div class="ei">✅</div><p>No payments due in 14 days!</p></div>';
-      return;
-    }
-    if (!due.length) {
-      container.innerHTML = pendingHtml + '<div class="empty"><div class="ei">✅</div><p>No renewals due in 14 days!</p></div>';
-      return;
-    }
-    container.innerHTML = pendingHtml + due.map(m => {
-      const p = m.expiryDate.split('T')[0].split('-');
-      const expDate = new Date(p[0], p[1]-1, p[2]);
-      const d = Math.ceil((expDate - today)/86400000);
-      const safePhone_r = esc(m.phone||'');
-      const safeId_r = esc(String(m._id||''));
-      const safeName_r = esc(String(m.name||''));
-      return `<div class="pay-row" style="flex-wrap:wrap;gap:8px">
-        <div style="display:flex;align-items:center;gap:12px">${avImg(m)}<div><div style="font-weight:700;font-size:.85rem">${esc(m.name)}</div><div style="font-size:.72rem;color:var(--tx3)">${esc(m.plan)}</div><div style="font-size:.7rem;color:var(--tx3)">Exp: ${fmt(m.expiryDate)}</div></div></div>
-        <span class="badge ${d<0?'b-inactive':'b-trial'}">${d<0?'Overdue':d+'d'}</span>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn btn-sm" style="background:#E3F2FD;color:#2980B9" onclick="dialPhone('${safePhone_r}')" title="Call">📞</button>
-          <button class="btn btn-sm" style="background:#FEF6E7;color:#F39C12" onclick="sendPaymentReminder('${safeId_r}','${safePhone_r}','${safeName_r}')" title="Send reminder">🔔</button>
-          <button class="btn btn-success btn-sm" onclick="openPaymentForById('${safeId_r}')">Renew</button>
-          <button class="btn btn-sm" style="background:#FFF0F0;color:#E74C3C" onclick="delMember('${safeId_r}','${safeName_r.replace(/'/g,"\\'")}')">🗑️</button>
-        </div>
-      </div>`;
-    }).join('');
+    _renderPaymentsList(); // Route to the renderer
   } catch(e) {
-    container.innerHTML = '<div class="empty"><p style="color:var(--gr)">Error</p></div>';
+    container.innerHTML = '<div class="empty"><p style="color:var(--gr)">Error fetching payments data</p></div>';
   }
 }
 
