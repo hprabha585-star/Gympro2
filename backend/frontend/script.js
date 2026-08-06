@@ -1528,7 +1528,7 @@ async function loadAttendance() {
     ]);
     if (mRes.status === 401) { logout(); return; }
     const members = await mRes.json();
-    const active = members.filter(m => m.status === 'Active' || m.status === 'Trial');
+   const active = members.filter(m => !m.isDeleted && (m.status === 'Active' || m.status === 'Trial'));
     const todayAtt = _attCache[date] || {};
     const pCount = Object.values(todayAtt).filter(s => s === 'Present').length;
     
@@ -2361,7 +2361,7 @@ async function loadRevenuePage() {
           const hasPending = Number(m.pendingAmount) > 0;
           return `
             <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #F0F5F5">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
                 <span style="font-weight:700;font-size:.82rem;color:#1A2E2E">${esc(m.name)} ${m.isDeleted ? '<span style="color:#E74C3C;font-size:0.65rem">(Deleted)</span>' : ''}</span>
                 <span style="font-size:.65rem;font-weight:800;background:#1A8C8C;color:#fff;padding:1px 7px;border-radius:8px">ID #${m.memberNo||'-'}</span>
               </div>
@@ -2379,12 +2379,6 @@ async function loadRevenuePage() {
                     <span style="font-weight:700;color:#1A8C8C">${tx.methodSummary}</span>
                   </div>
                   <button onclick="deletePayment('${m._id}', '${tx.groupId}')" style="position:absolute; right:0; top:50%; transform:translateY(-50%); background:#FFF0F0; color:#E74C3C; border:1px solid #FECDD5; border-radius:8px; padding:6px 10px; cursor:pointer; font-size:0.7rem;">🗑️</button>
-                </div>
-              `).join('') : ''}
-                  <div style="display:flex;justify-content:space-between;font-size:.65rem;color:#8AABAB;padding-top:2px">
-                    <span>${tx.date ? new Date(tx.date).toLocaleDateString('en-IN') : '—'}</span>
-                    <span style="font-weight:700;color:#1A8C8C">${tx.methodSummary}</span>
-                  </div>
                 </div>
               `).join('') : ''}
               ${pendingBreakdown ? `
