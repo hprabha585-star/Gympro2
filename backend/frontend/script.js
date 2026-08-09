@@ -1483,11 +1483,11 @@ async function _ensureAttLoaded() {
       const res = await fetch(`${BASE}/attendance`, { headers: hdrs() });
       if (!res.ok) throw new Error('fetch failed');
       const all = await res.json();
-      all.forEach(a => {
+all.forEach(a => {
         const mid = typeof a.memberId === 'object' ? (a.memberId?._id || '') : (a.memberId || '');
         if (!mid || !a.date) return;
         if (!_attCache[a.date]) _attCache[a.date] = {};
-        _attCache[a.date][mid] = a.status;
+        _attCache[a.date][mid] = { status: a.status, time: a.markedAt };
       });
       Object.keys(_attCache).forEach(d => {
         localStorage.setItem(attKey(d), JSON.stringify(_attCache[d]));
@@ -1529,9 +1529,14 @@ async function loadAttendance() {
     ]);
     if (mRes.status === 401) { logout(); return; }
     const members = await mRes.json();
-   const active = members.filter(m => !m.isDeleted && (m.status === 'Active' || m.status === 'Trial'));
+    const active = members.filter(m => !m.isDeleted && (m.status === 'Active' || m.status === 'Trial'));
     const todayAtt = _attCache[date] || {};
-    const pCount = Object.values(todayAtt).filter(s => s === 'Present').length;
+    
+    // Safely extract status whether it's the old string format or new object format
+    const pCount = Object.values(todayAtt).filter(val => {
+      const s = typeof val === 'string' ? val : val.status;
+      return s === 'Present';
+    }).length;
     
     const totalEl = document.getElementById('attTotal');
     const presentEl = document.getElementById('attPresent');
@@ -1545,9 +1550,32 @@ async function loadAttendance() {
       return;
     }
 
+    // SORT: Put those with attendance records at the top, sorted by time marked
+    active.sort((a, b) => {
+      const recA = todayAtt[a._id];
+      const recB = todayAtt[b._id];
+      if (recA && !recB) return -1;
+      if (!recA && recB) return 1;
+      
+      const timeA = (recA && typeof recA === 'object' && recA.time) ? new Date(recA.time).getTime() : 0;
+      const timeB = (recB && typeof recB === 'object' && recB.time) ? new Date(recB.time).getTime() : 0;
+      return timeB - timeA; // Most recent at the top
+    });
+
     tbody.innerHTML = active.map(m => {
-      const st = todayAtt[m._id] || 'Absent';
+      const rec = todayAtt[m._id];
+      const st = rec ? (typeof rec === 'string' ? rec : rec.status) : 'Absent';
       const isP = st === 'Present';
+
+      // Generate the time display string
+      let timeHtml = `<div id="atime-${m._id}" style="font-size:0.65rem;color:#8AABAB;margin-top:4px;font-weight:700;">`;
+      if (rec && typeof rec === 'object' && rec.time) {
+        timeHtml += `⏱ ${new Date(rec.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+      } else if (rec) {
+        timeHtml += `⏱ Marked`;
+      }
+      timeHtml += `</div>`;
+
       return `<tr style="background:${isP ? '#F5FFFB' : '#fff'};border-bottom:1px solid #F0F5F5">
         <td style="padding:10px 6px 10px 12px;vertical-align:middle">
           <div style="display:flex;align-items:center;gap:12px">
@@ -1556,6 +1584,7 @@ async function loadAttendance() {
               <div style="font-weight:800;font-size:.9rem;color:#1A2E2E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.name)}</div>
               <div style="font-size:.72rem;color:#8AABAB;margin-top:1px">${esc(m.phone || '')}</div>
               <div style="font-size:.7rem;color:#4A6464;margin-top:2px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.plan || '')}</div>
+              ${timeHtml}
             </div>
           </div>
          </td>
@@ -1577,19 +1606,41 @@ async function loadAttendance() {
 
 async function markAtt(memberId, date, status) {
   const badge = document.getElementById(`ab-${memberId}`);
+  const timeDiv = document.getElementById(`atime-${memberId}`);
+  const now = new Date();
+  
   if (badge) {
     badge.textContent = status;
     badge.style.background = status === 'Present' ? '#E8F8EF' : '#FEECEB';
     badge.style.color = status === 'Present' ? '#27AE60' : '#E74C3C';
     const row = badge.closest('tr');
-    if (row) row.style.background = status === 'Present' ? '#F5FFFB' : '#fff';
+    if (row) {
+      row.style.background = status === 'Present' ? '#F5FFFB' : '#fff';
+      
+      // Bump the row to the top of the table visually immediately
+      const tbody = document.getElementById('attBody');
+      if (tbody && tbody.firstChild !== row) {
+        tbody.prepend(row);
+      }
+    }
   }
+
+  // Render time locally
+  if (timeDiv) {
+    timeDiv.innerHTML = `⏱ ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+
+  // Update Cache
   if (!_attCache[date]) _attCache[date] = {};
-  _attCache[date][memberId] = status;
+  _attCache[date][memberId] = { status: status, time: now.toISOString() };
   localStorage.setItem(attKey(date), JSON.stringify(_attCache[date]));
   
   const activeTotal = parseInt(document.getElementById('attTotal')?.textContent) || 0;
-  const present = Object.values(_attCache[date]).filter(s => s === 'Present').length;
+  const present = Object.values(_attCache[date]).filter(val => {
+    const s = typeof val === 'string' ? val : val.status;
+    return s === 'Present';
+  }).length;
+  
   const presentEl = document.getElementById('attPresent');
   const pctEl = document.getElementById('attPct');
   if (presentEl) presentEl.textContent = present;
@@ -1641,10 +1692,11 @@ async function openMemberAttendance(memberId, memberName) {
   await _ensureAttLoaded();
 
   const records = {};
-  Object.keys(_attCache).forEach(date => {
+Object.keys(_attCache).forEach(date => {
     const dayData = _attCache[date];
     if (dayData && dayData[memberId]) {
-      records[date] = dayData[memberId];
+      const rec = dayData[memberId];
+      records[date] = typeof rec === 'string' ? rec : rec.status;
     }
   });
 
@@ -1763,10 +1815,12 @@ async function renderMemberAttendanceStats(memberId) {
     const monthlyStats = {};
     let totalPresent = 0;
 
-    Object.keys(_attCache).forEach(date => {
+Object.keys(_attCache).forEach(date => {
       const dayData = _attCache[date];
       if (!dayData) return;
-      const status = dayData[memberId];
+      const rec = dayData[memberId];
+      if (!rec) return;
+      const status = typeof rec === 'string' ? rec : rec.status;
       if (status === 'Present') {
         const [y, m] = date.split('-');
         const key = `${y}-${m}`;
