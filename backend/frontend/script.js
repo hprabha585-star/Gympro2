@@ -880,6 +880,7 @@ async function loadDashboard() {
     });
     renderDashTable(urgentDefault);
     _fillExtraDashTiles(members);
+    updateReminderBanner(members);
 
   } catch(e) { 
     console.error('Dashboard error:', e);
@@ -3708,6 +3709,70 @@ Contact us to renew today!
     toast(`Reminder sent to ${name}`, 'success');
   } catch(e) {
     toast('Error sending reminder', 'error');
+  }
+}
+/* Calculates if a member falls into the exact 3-day, 1-day, or 1-day overdue buckets */
+function updateReminderBanner(members) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  const targets = members.filter(m => {
+    if (m.isDeleted) return false;
+    if (!m.expiryDate) return false;
+
+    const p = m.expiryDate.split('T')[0].split('-');
+    const exp = new Date(p[0], p[1]-1, p[2]);
+    const diffDays = Math.round((exp - today) / 86400000);
+
+    // Target exactly 3 days left, 1 day left, or -1 days (1 day past expiry)
+    if (diffDays === 3 || diffDays === 1 || diffDays === -1) {
+      
+      // Ensure we haven't already sent them a message today
+      if (m.lastReminderSent) {
+         const lastSent = new Date(m.lastReminderSent);
+         if (lastSent.toDateString() === new Date().toDateString()) return false; 
+      }
+      return true;
+    }
+    return false;
+  });
+
+  const banner = document.getElementById('actionReminderBanner');
+  if (!banner) return;
+
+  if (targets.length > 0) {
+    document.getElementById('actionReminderText').textContent = `${targets.length} automated reminder(s) queued for today.`;
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+/* Grabs the first person in the queue and sends their message */
+async function sendNextScheduledReminder() {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  const targets = allMembersCache.filter(m => {
+    if (m.isDeleted || !m.expiryDate) return false;
+    const p = m.expiryDate.split('T')[0].split('-');
+    const exp = new Date(p[0], p[1]-1, p[2]);
+    const diffDays = Math.round((exp - today) / 86400000);
+
+    if (diffDays === 3 || diffDays === 1 || diffDays === -1) {
+      if (m.lastReminderSent && new Date(m.lastReminderSent).toDateString() === new Date().toDateString()) {
+        return false;
+      }
+      return true;
+    }
+    return false;
+  });
+
+  if (targets.length > 0) {
+    const m = targets[0];
+    await sendPaymentReminder(m._id || m.id, m.phone, m.name);
+  } else {
+    toast('All scheduled reminders sent for today!', 'success');
   }
 }
 
