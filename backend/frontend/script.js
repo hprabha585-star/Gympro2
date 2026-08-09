@@ -1514,13 +1514,19 @@ all.forEach(a => {
   return _attFetchPromise;
 }
 
+let _attendanceSearchQuery = '';
+
+function filterAttendance() {
+  _attendanceSearchQuery = (document.getElementById('attendanceSearch')?.value || '').toLowerCase().trim();
+  _renderAttendanceList();
+}
+
 async function loadAttendance() {
   const dateEl = document.getElementById('attDate');
   const date = dateEl?.value || getLocalTodayStr();
   if (dateEl) dateEl.value = date;
   const tbody = document.getElementById('attBody');
-  if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="2"><div class="empty"><div class="ei">⏳</div><p>Loading…</p></div></td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="2"><div class="empty"><div class="ei">⏳</div><p>Loading…</p></div></td></tr>';
 
   try {
     const [mRes] = await Promise.all([
@@ -1528,80 +1534,103 @@ async function loadAttendance() {
       _ensureAttLoaded()
     ]);
     if (mRes.status === 401) { logout(); return; }
+    
+    // Cache the members so we can instantly search without reloading from the server
     const members = await mRes.json();
-    const active = members.filter(m => !m.isDeleted && (m.status === 'Active' || m.status === 'Trial'));
-    const todayAtt = _attCache[date] || {};
+    allMembersCache = members; 
     
-    // Safely extract status whether it's the old string format or new object format
-    const pCount = Object.values(todayAtt).filter(val => {
-      const s = typeof val === 'string' ? val : val.status;
-      return s === 'Present';
-    }).length;
-    
-    const totalEl = document.getElementById('attTotal');
-    const presentEl = document.getElementById('attPresent');
-    const pctEl = document.getElementById('attPct');
-    if (totalEl) totalEl.textContent = active.length;
-    if (presentEl) presentEl.textContent = pCount;
-    if (pctEl) pctEl.textContent = active.length ? `${Math.min(100, Math.round(pCount / active.length * 100))}%` : '0%';
-
-    if (!active.length) {
-      tbody.innerHTML = '<tr><td colspan="2"><div class="empty"><p>No active members</p></div></td></tr>';
-      return;
-    }
-
-    // SORT: Put those with attendance records at the top, sorted by time marked
-    active.sort((a, b) => {
-      const recA = todayAtt[a._id];
-      const recB = todayAtt[b._id];
-      if (recA && !recB) return -1;
-      if (!recA && recB) return 1;
-      
-      const timeA = (recA && typeof recA === 'object' && recA.time) ? new Date(recA.time).getTime() : 0;
-      const timeB = (recB && typeof recB === 'object' && recB.time) ? new Date(recB.time).getTime() : 0;
-      return timeB - timeA; // Most recent at the top
-    });
-
-    tbody.innerHTML = active.map(m => {
-      const rec = todayAtt[m._id];
-      const st = rec ? (typeof rec === 'string' ? rec : rec.status) : 'Absent';
-      const isP = st === 'Present';
-
-      // Generate the time display string
-      let timeHtml = `<div id="atime-${m._id}" style="font-size:0.65rem;color:#8AABAB;margin-top:4px;font-weight:700;">`;
-      if (rec && typeof rec === 'object' && rec.time) {
-        timeHtml += `⏱ ${new Date(rec.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
-      } else if (rec) {
-        timeHtml += `⏱ Marked`;
-      }
-      timeHtml += `</div>`;
-
-      return `<tr style="background:${isP ? '#F5FFFB' : '#fff'};border-bottom:1px solid #F0F5F5">
-        <td style="padding:10px 6px 10px 12px;vertical-align:middle">
-          <div style="display:flex;align-items:center;gap:12px">
-            ${avImg(m)}
-            <div style="min-width:0">
-              <div style="font-weight:800;font-size:.9rem;color:#1A2E2E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.name)}</div>
-              <div style="font-size:.72rem;color:#8AABAB;margin-top:1px">${esc(m.phone || '')}</div>
-              <div style="font-size:.7rem;color:#4A6464;margin-top:2px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.plan || '')}</div>
-              ${timeHtml}
-            </div>
-          </div>
-         </td>
-        <td style="padding:10px 12px 10px 4px;vertical-align:middle;text-align:right">
-          <div id="ab-${m._id}" style="display:inline-block;padding:4px 11px;border-radius:20px;font-size:.72rem;font-weight:800;margin-bottom:6px;background:${isP?'#E8F8EF':'#FEECEB'};color:${isP?'#27AE60':'#E74C3C'}">${st}</div>
-          <div style="display:flex;gap:5px;justify-content:flex-end">
-            <button onclick="markAtt('${m._id}','${date}','Present')" style="padding:6px 12px;border-radius:20px;border:none;background:#E8F8EF;color:#27AE60;font-family:inherit;font-size:.78rem;font-weight:800;cursor:pointer;min-height:36px;-webkit-tap-highlight-color:transparent">✓ P</button>
-            <button onclick="markAtt('${m._id}','${date}','Absent')" style="padding:6px 12px;border-radius:20px;border:none;background:#FEECEB;color:#E74C3C;font-family:inherit;font-size:.78rem;font-weight:800;cursor:pointer;min-height:36px;-webkit-tap-highlight-color:transparent">✗ A</button>
-          </div>
-         </td>
-       </tr>`;
-    }).join('');
-
+    _renderAttendanceList();
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="2"><div class="empty"><p style="color:#E74C3C">Error loading. Check connection.</p></div></td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="2"><div class="empty"><p style="color:#E74C3C">Error loading. Check connection.</p></div></td></tr>';
     console.error('loadAttendance error:', e);
   }
+}
+
+function _renderAttendanceList() {
+  const dateEl = document.getElementById('attDate');
+  const date = dateEl?.value || getLocalTodayStr();
+  const tbody = document.getElementById('attBody');
+  if (!tbody) return;
+
+  // Base list: Active members only
+  let active = allMembersCache.filter(m => !m.isDeleted && (m.status === 'Active' || m.status === 'Trial'));
+  
+  const todayAtt = _attCache[date] || {};
+  
+  // Calculate total stats globally (so search doesn't mess up the top numbers)
+  const pCount = Object.values(todayAtt).filter(val => {
+    const s = typeof val === 'string' ? val : val.status;
+    return s === 'Present';
+  }).length;
+  
+  const totalEl = document.getElementById('attTotal');
+  const presentEl = document.getElementById('attPresent');
+  const pctEl = document.getElementById('attPct');
+  if (totalEl) totalEl.textContent = active.length;
+  if (presentEl) presentEl.textContent = pCount;
+  if (pctEl) pctEl.textContent = active.length ? `${Math.min(100, Math.round(pCount / active.length * 100))}%` : '0%';
+
+  // Apply the Live Search Filter
+  if (_attendanceSearchQuery) {
+    active = active.filter(m => 
+      (m.name || '').toLowerCase().includes(_attendanceSearchQuery) || 
+      (m.phone || '').includes(_attendanceSearchQuery) || 
+      String(m.memberNo || '').includes(_attendanceSearchQuery)
+    );
+  }
+
+  if (!active.length) {
+    tbody.innerHTML = `<tr><td colspan="2"><div class="empty"><p>${_attendanceSearchQuery ? 'No matching members found.' : 'No active members'}</p></div></td></tr>`;
+    return;
+  }
+
+  // SORT: Put those with attendance records at the top, sorted by time marked
+  active.sort((a, b) => {
+    const recA = todayAtt[a._id];
+    const recB = todayAtt[b._id];
+    if (recA && !recB) return -1;
+    if (!recA && recB) return 1;
+    
+    const timeA = (recA && typeof recA === 'object' && recA.time) ? new Date(recA.time).getTime() : 0;
+    const timeB = (recB && typeof recB === 'object' && recB.time) ? new Date(recB.time).getTime() : 0;
+    return timeB - timeA; // Most recent at the top
+  });
+
+  tbody.innerHTML = active.map(m => {
+    const rec = todayAtt[m._id];
+    const st = rec ? (typeof rec === 'string' ? rec : rec.status) : 'Absent';
+    const isP = st === 'Present';
+
+    // Generate the time display string
+    let timeHtml = `<div id="atime-${m._id}" style="font-size:0.65rem;color:#8AABAB;margin-top:4px;font-weight:700;">`;
+    if (rec && typeof rec === 'object' && rec.time) {
+      timeHtml += `⏱ ${new Date(rec.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+    } else if (rec) {
+      timeHtml += `⏱ Marked`;
+    }
+    timeHtml += `</div>`;
+
+    return `<tr style="background:${isP ? '#F5FFFB' : '#fff'};border-bottom:1px solid #F0F5F5">
+      <td style="padding:10px 6px 10px 12px;vertical-align:middle">
+        <div style="display:flex;align-items:center;gap:12px">
+          ${avImg(m)}
+          <div style="min-width:0">
+            <div style="font-weight:800;font-size:.9rem;color:#1A2E2E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.name)}</div>
+            <div style="font-size:.72rem;color:#8AABAB;margin-top:1px">${esc(m.phone || '')}</div>
+            <div style="font-size:.7rem;color:#4A6464;margin-top:2px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.plan || '')}</div>
+            ${timeHtml}
+          </div>
+        </div>
+       </td>
+      <td style="padding:10px 12px 10px 4px;vertical-align:middle;text-align:right">
+        <div id="ab-${m._id}" style="display:inline-block;padding:4px 11px;border-radius:20px;font-size:.72rem;font-weight:800;margin-bottom:6px;background:${isP?'#E8F8EF':'#FEECEB'};color:${isP?'#27AE60':'#E74C3C'}">${st}</div>
+        <div style="display:flex;gap:5px;justify-content:flex-end">
+          <button onclick="markAtt('${m._id}','${date}','Present')" style="padding:6px 12px;border-radius:20px;border:none;background:#E8F8EF;color:#27AE60;font-family:inherit;font-size:.78rem;font-weight:800;cursor:pointer;min-height:36px;-webkit-tap-highlight-color:transparent">✓ P</button>
+          <button onclick="markAtt('${m._id}','${date}','Absent')" style="padding:6px 12px;border-radius:20px;border:none;background:#FEECEB;color:#E74C3C;font-family:inherit;font-size:.78rem;font-weight:800;cursor:pointer;min-height:36px;-webkit-tap-highlight-color:transparent">✗ A</button>
+        </div>
+       </td>
+     </tr>`;
+  }).join('');
 }
 
 async function markAtt(memberId, date, status) {
