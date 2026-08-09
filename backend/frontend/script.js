@@ -3694,6 +3694,14 @@ Please renew your membership to continue your fitness journey without interrupti
 Contact us to renew today!
 - ${getGymName()} Management`;
 
+    // 1. Tell backend to update the lastReminderSent timestamp
+    fetch(`${API}/send-reminder/${memberId}`, { method: 'POST', headers: hdrs() }).catch(()=>{});
+    
+    // 2. Update local cache immediately so the banner knows it was sent
+    m.lastReminderSent = new Date().toISOString();
+    if (typeof updateReminderBanner === 'function') updateReminderBanner(allMembersCache);
+
+    // 3. Open WhatsApp
     const clean = String(phone).replace(/[^0-9]/g, '');
     const num = clean.startsWith('91') ? clean : '91' + clean;
     window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank');
