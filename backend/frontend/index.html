@@ -197,8 +197,17 @@
       <button onclick="showPage('gymadmin',document.querySelector('[data-page=gymadmin]'));updateBNav('none')" style="background:#F39C12;color:#fff;border:none;border-radius:9px;padding:7px 14px;font-family:inherit;font-size:.78rem;font-weight:800;cursor:pointer">Review &#x2192;</button>
     </div>
 
-    <div id="alertBanner" class="banner green">
+<div id="alertBanner" class="banner green">
       <div class="banner-text"><h3>✅ All Good!</h3><p>No payments due this week</p></div>
+    </div>
+
+    <!-- NEW: Smart Reminders Banner -->
+    <div id="actionReminderBanner" style="display:none;background:#E3F2FD;border:1px solid #BBDEFB;border-radius:14px;padding:12px 14px;margin-bottom:10px;align-items:center;justify-content:space-between;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:1.2rem">📱</span>
+        <span style="font-size:.82rem;font-weight:700;color:#1565C0" id="actionReminderText"></span>
+      </div>
+      <button onclick="sendNextScheduledReminder()" style="background:#1565C0;color:#fff;border:none;border-radius:9px;padding:7px 14px;font-family:inherit;font-size:.78rem;font-weight:800;cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(21,101,192,.3)">Send Next</button>
     </div>
 
     <div style="font-size:.7rem;font-weight:800;color:#8AABAB;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding:0 2px" id="dashTodayLabel">Today</div>
