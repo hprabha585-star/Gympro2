@@ -328,11 +328,21 @@ router.get('/monthly-due/:memberId', async (req, res) => {
   }
 });
 
+// Record the timestamp when a reminder is sent via WhatsApp
 router.post('/send-reminder/:memberId', async (req, res) => {
-  res.json({ message: 'Reminder sent successfully' });
-});
-router.post('/record-payment/:memberId', async (req, res) => {
-  res.json({ message: 'Payment recorded successfully' });
+  try {
+    const gymId = req.user.gymId || req.user.userId;
+    const member = await Member.findOne({ where: { id: req.params.memberId, userId: gymId } });
+    
+    if (!member) return res.status(404).json({ error: 'Member not found' });
+
+    member.lastReminderSent = new Date();
+    await member.save();
+
+    res.json({ message: 'Reminder timestamp updated successfully', lastReminderSent: member.lastReminderSent });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
