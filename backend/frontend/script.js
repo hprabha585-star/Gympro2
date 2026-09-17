@@ -2255,13 +2255,14 @@ function _renderPaymentsList() {
         const safeId_p = esc(String(m._id||''));
         const safeName_p = esc(m.name||'');
         return `
-        <div class="pay-row" style="border:1.5px solid #FEECEB;background:#FFFBFB;flex-wrap:wrap;gap:8px">
+<div class="pay-row" style="border:1.5px solid #FEECEB;background:#FFFBFB;flex-wrap:wrap;gap:8px">
           <div style="display:flex;align-items:center;gap:12px">${avImg(m)}<div><div style="font-weight:700;font-size:.85rem">${safeName_p}</div><div style="font-size:.72rem;color:var(--tx3)">${esc(m.plan||'')}</div></div></div>
           <span class="badge" style="background:#FEECEB;color:#E74C3C;font-weight:800">Due ₹${Number(m.pendingAmount).toLocaleString('en-IN')}</span>
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button class="btn btn-sm" style="background:#E3F2FD;color:#2980B9" onclick="dialPhone('${safePhone_p}')" title="Call">📞</button>
             <button class="btn btn-sm" style="background:#FEF6E7;color:#F39C12" onclick="sendPaymentReminder('${safeId_p}','${safePhone_p}','${safeName_p}')" title="Send reminder">🔔</button>
-            <button class="btn btn-sm" style="background:#F0F5F5;color:#6B7280;border:1px solid #E0ECEC" onclick="markMemberInactive('${safeId_p}','${safeName_p.replace(/'/g,"\\'")}')" title="Mark Inactive">⏸️ Inactive</button>
+            <button class="btn btn-sm" style="background:#F0F5F5;color:#6B7280;border:1px solid #E0ECEC" onclick="markMemberInactive('${safeId_p}','${safeName_p.replace(/'/g,"\\'")}')" title="Mark Inactive">⏸️</button>
+            <button class="btn btn-sm" style="background:#FFF0F0;color:#E74C3C;border:1px solid #FECDD5" onclick="clearPendingAmount('${safeId_p}', ${(m.paymentHistory || []).length === 0})" title="Clear Pending Balance">🗑️</button>
             <button class="btn btn-success btn-sm" onclick="openCollectDue('${safeId_p}')">💰 Receive</button>
           </div>
         </div>`;
