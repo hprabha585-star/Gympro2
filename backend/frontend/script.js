@@ -436,6 +436,12 @@ window.addEventListener('resize', () => {
 
 document.addEventListener('click', e => {
   if (e.target.classList.contains('modal')) {
+    // If clicking outside the Payment Modal, force the cancel routine
+    // to run so unpaid "New Members" are cleanly deleted from the database.
+    if (e.target.id === 'paymentModal') {
+      cancelPayment();
+      return;
+    }
     closeModal(e.target.id);
     if (e.target.id === 'cameraModal' && curStream) curStream.getTracks().forEach(t => t.stop());
   }
