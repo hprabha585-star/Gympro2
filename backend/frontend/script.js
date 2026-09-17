@@ -3029,9 +3029,24 @@ async function deletePayment(memberId, groupId) {
         method: 'DELETE', headers: hdrs()
       });
       if (res.ok) {
+        // FRONTTEND FIX: Verify if history is now empty. If yes, auto-clear the pending amount.
+        const mRes = await fetch(`${API}/${memberId}`, { headers: hdrs() });
+        if (mRes.ok) {
+           const updatedMember = await mRes.json();
+           if (!updatedMember.paymentHistory || updatedMember.paymentHistory.length === 0) {
+              await fetch(`${API}/${memberId}`, {
+                 method: 'PUT', headers: hdrs(),
+                 body: JSON.stringify({ pendingAmount: 0 })
+              });
+              if (updatedMember.isDeleted) {
+                 await fetch(`${API}/${memberId}`, { method: 'DELETE', headers: hdrs() });
+              }
+           }
+        }
         toast('Payment removed', 'success');
         loadRevenuePage();
-        loadDashboard(); // Refreshes stats
+        loadDashboard(); 
+        loadPayments();
       } else {
         const data = await res.json();
         toast(data.error || 'Failed to delete payment', 'error');
@@ -3042,21 +3057,25 @@ async function deletePayment(memberId, groupId) {
 async function clearPendingAmount(memberId, isEmptyHistory) {
   doubleConfirm('Clear this pending balance? This will set the due amount to ₹0.', async () => {
     try {
-      // 1. Clear the pending balance
-      await fetch(`${API}/${memberId}`, {
+      // 1. Update pending amount to 0 via standard PUT
+      const res = await fetch(`${API}/${memberId}`, {
         method: 'PUT', headers: hdrs(),
         body: JSON.stringify({ pendingAmount: 0 })
       });
       
-      // 2. If they have no payment history at all, trigger a hard delete
-      // so the "zombie" member completely disappears from the revenue page.
-      if (isEmptyHistory) {
-        await fetch(`${API}/${memberId}`, { method: 'DELETE', headers: hdrs() });
+      if (res.ok) {
+        // 2. If no history exists, completely delete the member to remove the zombie
+        if (isEmptyHistory) {
+          await fetch(`${API}/${memberId}`, { method: 'DELETE', headers: hdrs() });
+        }
+        toast('Pending balance cleared', 'success');
+        loadRevenuePage();
+        loadPayments();
+        loadAllMembers();
+      } else {
+        const data = await res.json();
+        toast(data.error || 'Failed to clear balance', 'error');
       }
-      
-      toast('Pending balance cleared', 'success');
-      loadRevenuePage();
-      loadPayments();
     } catch(e) { toast('Network error', 'error'); }
   });
 }
