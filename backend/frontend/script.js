@@ -5,7 +5,7 @@ document.addEventListener('wheel', () => {
 }, { passive: true });
 
 /* ── CONFIG ── */
-const BASE        = 'https://lightpink-mandrill-900007.hostingersite.com/api';
+const BASE        = 'https://olivedrab-snail-330464.hostingersite.com/api';
 const API         = `${BASE}/members`;
 const TAPI        = `${BASE}/trainers`;
 const PROFILE_API = `${BASE}/auth/profile`;
