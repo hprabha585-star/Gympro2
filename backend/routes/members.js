@@ -183,6 +183,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // NEW: Delete specific payment from history
+// NEW: Delete specific payment from history (Supports both new Group IDs and Legacy Single records)
 router.delete('/:id/payment/:groupId', async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
@@ -190,7 +191,16 @@ router.delete('/:id/payment/:groupId', async (req, res) => {
     if (!member) return res.status(404).json({ error: 'Member not found' });
 
     const history = member.paymentHistory || [];
-    const filteredHistory = history.filter(p => p.groupId !== req.params.groupId && p.receiptNo !== req.params.groupId);
+    
+    // Filter out the payment. Includes a fallback `single-${i}` to catch old legacy payments
+    const filteredHistory = history.filter((p, i) => {
+      const matchGroupId = p.groupId === req.params.groupId;
+      const matchReceiptNo = p.receiptNo === req.params.groupId;
+      const matchLegacyIndex = `single-${i}` === req.params.groupId;
+      
+      // If any of these match, we REMOVE it from the array
+      return !(matchGroupId || matchReceiptNo || matchLegacyIndex);
+    });
 
     if (history.length === filteredHistory.length) {
       return res.status(404).json({ error: 'Payment not found' });
@@ -198,8 +208,8 @@ router.delete('/:id/payment/:groupId', async (req, res) => {
 
     member.paymentHistory = filteredHistory;
     
-    // If a soft-deleted member has their last remaining payment deleted, hard delete them to clean up
-    if (member.isDeleted && filteredHistory.length === 0) {
+    // ZOMBIE CLEANUP: If soft-deleted member has their last remaining payment deleted, hard delete them
+    if (member.isDeleted && filteredHistory.length === 0 && Number(member.pendingAmount) <= 0) {
       await member.destroy();
     } else {
       await member.save();
