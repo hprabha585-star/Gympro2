@@ -33,7 +33,7 @@ router.get('/gym-qr', authMiddleware, async (req, res) => {
     const encodedData = Buffer.from(JSON.stringify(qrData)).toString('base64');
 
     // ⚠️ Update this to your new domain once you move off Render
-    const checkinUrl = `https://lightpink-mandrill-900007.hostingersite.com/member-checkin.html?qr=${encodeURIComponent(encodedData)}`;
+    const checkinUrl = `https://olivedrab-snail-330464.hostingersite.com/member-checkin.html?qr=${encodeURIComponent(encodedData)}`;
 
     res.json({
       qrString: checkinUrl,
