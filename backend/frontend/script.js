@@ -2474,7 +2474,15 @@ async function loadRevenuePage() {
 ${pendingBreakdown ? (() => {
                 const totalPaid = history.reduce((s,p) => s + (Number(p.amount) || 0), 0);
                 const pendingAmt = Number(m.pendingAmount) || 0;
-                const latestReceipt = history.length > 0 ? history[history.length - 1].receiptNo : ('REC-' + (m.memberNo || Date.now().toString().slice(-6)));
+                
+                // Safely grab the receipt number, or explicitly generate a fallback if the old history didn't record one
+                let latestReceipt = '';
+                if (history.length > 0 && history[history.length - 1].receiptNo) {
+                  latestReceipt = history[history.length - 1].receiptNo;
+                }
+                if (!latestReceipt) {
+                  latestReceipt = 'REC-' + (m.memberNo || String(Date.now()).slice(-6));
+                }
                 const isEmptyHistory = history.length === 0;
                 
                 return `
@@ -2549,7 +2557,7 @@ function groupPaymentEntries(history) {
     g.categories[type] = (g.categories[type] || 0) + (p.amount || 0);
     if (p.method === 'upi') g.upiTotal += p.amount || 0;
     else if (p.method === 'cash') g.cashTotal += p.amount || 0;
-    else g.otherTotal += p.amount || 0; // card, etc.
+    else g.otherTotal += p.amount || 0;
   });
 
   return order.map(key => {
@@ -2559,13 +2567,14 @@ function groupPaymentEntries(history) {
     if (g.cashTotal > 0) parts.push(`Cash ₹${g.cashTotal.toLocaleString('en-IN')}`);
     if (g.otherTotal > 0) parts.push(`Card ₹${g.otherTotal.toLocaleString('en-IN')}`);
     
-    // Determine the raw method to pass into the receipt system
     let rawMethod = 'cash';
     if (g.upiTotal > 0 && g.cashTotal > 0) rawMethod = 'split';
     else if (g.upiTotal > 0) rawMethod = 'upi';
     else if (g.otherTotal > 0) rawMethod = 'card';
     
     const totalAmount = g.upiTotal + g.cashTotal + g.otherTotal;
+    // Generate fallback receipt number if missing from old records
+    const finalReceipt = g.receiptNo || ('REC-' + Date.now().toString().slice(-6));
 
     return {
       groupId: key, 
@@ -2573,12 +2582,11 @@ function groupPaymentEntries(history) {
       categories: Object.entries(g.categories).map(([type, amount]) => ({ type, amount })),
       methodSummary: parts.join(' + ') || 'Paid',
       rawMethod: rawMethod,
-      receiptNo: g.receiptNo,
+      receiptNo: finalReceipt,
       totalAmount: totalAmount
     };
   });
 }
-
 /* ── PAYMENT MODAL ── */
 // Look up full member from cache by ID then open payment modal
 function openPaymentForById(id) {
