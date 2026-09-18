@@ -174,8 +174,7 @@ async function loadGymQR() {
         
         if (!gymId) throw new Error('Access Denied. Gym ID missing.');
         
-        const cachedProfile = JSON.parse(localStorage.getItem('gymProfile_cache') || '{}');
-        const gymName = (u.gymName && u.gymName.trim()) || (cachedProfile.cfg && cachedProfile.cfg.upiName) || 'Our Gym';
+const gymName = (u.gymName && u.gymName.trim()) || 'Our Gym';
         
         // Create the exact payload format the check-in page expects
         const qrPayload = {
