@@ -183,7 +183,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // NEW: Delete specific payment from history
-// NEW: Delete specific payment from history (Supports both new Group IDs and Legacy Single records)
+// Delete specific payment from history (Supports both new Group IDs and Legacy Single records)
 router.delete('/:id/payment/:groupId', async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
