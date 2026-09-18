@@ -168,19 +168,26 @@ async function loadGymQR() {
           return;
         }
         
-        // 2. FALLBACK FOR STAFF ACCOUNTS
-        // If the backend blocks the staff member, generate the QR locally
+        // 2. 🚀 FALLBACK FOR STAFF ACCOUNTS 🚀
         const u = JSON.parse(localStorage.getItem('user') || '{}');
         const gymId = u.gymId || u.id || u.userId;
         
         if (!gymId) throw new Error('Access Denied. Gym ID missing.');
         
-        // Dynamically build the URL using your current domain
-        const checkinUrl = `${window.location.origin}/checkin.html?gym=${gymId}`;
-        
-        // Safely grab the Gym Name
         const cachedProfile = JSON.parse(localStorage.getItem('gymProfile_cache') || '{}');
         const gymName = (u.gymName && u.gymName.trim()) || (cachedProfile.cfg && cachedProfile.cfg.upiName) || 'Our Gym';
+        
+        // Create the exact payload format the check-in page expects
+        const qrPayload = {
+          gymId: gymId,
+          gymName: gymName,
+          type: "gym_checkin",
+          timestamp: Date.now()
+        };
+        
+        // Encode the payload to Base64 (matches the eyJneW1... format)
+        const encodedData = btoa(JSON.stringify(qrPayload));
+        const checkinUrl = `${window.location.origin}/member-checkin.html?qr=${encodedData}`;
         
         displayQR({ checkinUrl, gymName });
         
