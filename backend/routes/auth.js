@@ -213,15 +213,19 @@ router.post('/logout', verifyToken, (req, res) => res.json({ message: 'Logged ou
 router.get('/gym-profile', verifyToken, async (req, res) => {
   try {
     const activeId = req.user.gymId || req.user.userId;
-    if (Number(activeId) === Number(req.user.userId)) {
-      const owner = await User.findByPk(activeId, { attributes: ['gymData', 'gymName', 'name'] });
-      if (!owner) return res.status(404).json({ error: 'Primary gym profile not found.' });
+    
+    // 1. Check if the gym belongs to a primary Admin (User table)
+    const owner = await User.findByPk(activeId, { attributes: ['gymData', 'gymName', 'name', 'role'] });
+    if (owner && owner.role === 'admin') {
       return res.json({ gymData: owner.gymData || '{}', gymName: owner.gymName || owner.name || '' });
-    } else {
-      const gym = await Gym.findByPk(activeId, { attributes: ['gymData', 'name'] });
-      if (!gym) return res.status(404).json({ error: 'Additional gym profile not found.' });
-      return res.json({ gymData: gym.gymData || '{}', gymName: gym.name || '' });
-    }
+    } 
+    
+    // 2. Otherwise, check if it's an additional Gym (Gym table)
+    const gym = await Gym.findByPk(activeId, { attributes: ['gymData', 'name'] });
+    if (!gym) return res.status(404).json({ error: 'Gym profile not found.' });
+    
+    return res.json({ gymData: gym.gymData || '{}', gymName: gym.name || '' });
+    
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -229,21 +233,24 @@ router.get('/gym-profile', verifyToken, async (req, res) => {
 router.patch('/profile', verifyToken, async (req, res) => {
   try {
     const activeId = req.user.gymId || req.user.userId;
-    if (Number(activeId) === Number(req.user.userId)) {
-      const owner = await User.findByPk(activeId);
-      if (!owner) return res.status(404).json({ error: 'Primary gym profile not found.' });
+    
+    // 1. Check if updating a primary Admin gym
+    const owner = await User.findByPk(activeId);
+    if (owner && owner.role === 'admin') {
       if (req.body.gymData !== undefined) owner.gymData = req.body.gymData;
       if (req.body.gymName !== undefined) owner.gymName = req.body.gymName;
       await owner.save();
       return res.json({ message: 'Profile updated.' });
-    } else {
-      const gym = await Gym.findByPk(activeId);
-      if (!gym) return res.status(404).json({ error: 'Additional gym profile not found.' });
-      if (req.body.gymData !== undefined) gym.gymData = req.body.gymData;
-      if (req.body.gymName !== undefined) gym.name = req.body.gymName;
-      await gym.save();
-      return res.json({ message: 'Profile updated.' });
-    }
+    } 
+    
+    // 2. Check if updating an additional Gym
+    const gym = await Gym.findByPk(activeId);
+    if (!gym) return res.status(404).json({ error: 'Gym profile not found.' });
+    if (req.body.gymData !== undefined) gym.gymData = req.body.gymData;
+    if (req.body.gymName !== undefined) gym.name = req.body.gymName;
+    await gym.save();
+    return res.json({ message: 'Profile updated.' });
+    
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
