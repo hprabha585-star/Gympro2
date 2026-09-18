@@ -155,7 +155,7 @@
       window.location.href = '/login.html';
     }
     
-    async function loadGymQR() {
+async function loadGymQR() {
       try {
         // 1. Try to get it from the backend (Works for Admin)
         const res = await fetch(`${BASE}/qr/gym-qr`, {
