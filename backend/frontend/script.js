@@ -33,8 +33,11 @@ let gymCfg     = {};
 function getGymName() {
   try {
     const u = JSON.parse(localStorage.getItem('user') || '{}');
-    return (u.gymName && u.gymName.trim()) || (gymCfg && gymCfg.upiName && gymCfg.upiName.trim()) || 'Our Gym';
-  } catch (e) { return (gymCfg && gymCfg.upiName) || 'Our Gym'; }
+    // Strictly return the registered gym name, ignoring the UPI settings
+    return (u.gymName && u.gymName.trim()) || 'Our Gym';
+  } catch (e) { 
+    return 'Our Gym'; 
+  }
 }
 let trainerMap = {};
 
