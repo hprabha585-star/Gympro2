@@ -5,8 +5,8 @@
 // anyone who had already loaded it once, exactly what was happening here.
 // Bumping the cache name forces every existing browser to treat the old
 // cache as stale and fetch fresh copies of everything on next load.
-const CACHE_NAME = 'gympro-app-v3';
-const DATA_CACHE = 'gympro-data-v3';
+const CACHE_NAME = 'gympro-app-v4';
+const DATA_CACHE = 'gympro-data-v4';
 
 const ASSETS_TO_CACHE = [
   '/',
@@ -27,7 +27,11 @@ const ASSETS_TO_CACHE = [
 // Install & Cache App Files
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS_TO_CACHE))
+    // FIX: cache.addAll() rejects if ANY file 404s (e.g. a missing icon), which
+    // silently aborted the whole install. Cache each file independently.
+    caches.open(CACHE_NAME).then(cache =>
+      Promise.all(ASSETS_TO_CACHE.map(url => cache.add(url).catch(() => {})))
+    )
   );
   self.skipWaiting();
 });
@@ -45,6 +49,11 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
+// Logout wipes cached API data (member lists etc.) from this device
+self.addEventListener('message', event => {
+  if (event.data === 'CLEAR_DATA') event.waitUntil(caches.delete(DATA_CACHE));
+});
+
 // Smart Fetch: Intercept requests
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
@@ -54,8 +63,10 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(event.request)
         .then(response => {
-          const clone = response.clone();
-          caches.open(DATA_CACHE).then(cache => cache.put(event.request, clone));
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(DATA_CACHE).then(cache => cache.put(event.request, clone));
+          }
           return response;
         })
         .catch(() => caches.match(event.request))
@@ -72,8 +83,10 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(event.request)
         .then(response => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          if (response.ok && url.origin === self.location.origin) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
           return response;
         })
         .catch(() => caches.match(event.request))
