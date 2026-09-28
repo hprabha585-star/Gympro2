@@ -2933,6 +2933,40 @@ function finalizeFullBreakdownEntries(breakdown, methodTotals, dateVal, receiptP
   return entries;
 }
 
+/* Assigns already-collected money to fee categories WITHOUT moving it in
+   time. `chunks` = [{groupId, receiptNo, date, parts:[{method, amount}]}] in
+   chronological order. Categories are filled in the order Plan -> Admission
+   -> PT (the same order the "pending (Plan)" label uses). Every chunk keeps
+   its own date, groupId and payment method, so daily/monthly revenue stays
+   exactly where the cash was actually received. The grand total never
+   changes: anything beyond the listed fees is kept under Plan. */
+function itemizeChunksByDate(breakdown, chunks) {
+  const left = {
+    plan: Math.round(breakdown.plan || 0),
+    admission: Math.round(breakdown.admission || 0),
+    pt: Math.round(breakdown.pt || 0)
+  };
+  const order = ['plan', 'admission', 'pt'];
+  const out = [];
+  chunks.forEach((c, ci) => {
+    c.parts.forEach(part => {
+      let remaining = Math.round(part.amount || 0);
+      order.forEach(cat => {
+        if (remaining <= 0 || left[cat] <= 0) return;
+        const take = Math.min(remaining, left[cat]);
+        left[cat] -= take; remaining -= take;
+        out.push({ amount: take, date: c.date, method: part.method, type: cat, groupId: c.groupId,
+                   receiptNo: `${c.receiptNo}-${cat.toUpperCase()}-${String(part.method).toUpperCase()}` });
+      });
+      if (remaining > 0) { // more than the recorded fees: keep the money, under Plan
+        out.push({ amount: remaining, date: c.date, method: part.method, type: 'plan', groupId: c.groupId,
+                   receiptNo: `${c.receiptNo}-PLAN-${String(part.method).toUpperCase()}` });
+      }
+    });
+  });
+  return out;
+}
+
 function updatePendingDisplay(total) {
   const input = document.getElementById('payAmountReceived');
   const row = document.getElementById('pendingDisplayRow');
@@ -3272,27 +3306,44 @@ async function confirmPayment() {
         const partialEntries = history.filter(p => p.type === 'partial');
         const keptEntries = history.filter(p => p.type !== 'partial');
 
-        let combinedUpi = 0, combinedCash = 0;
-        partialEntries.forEach(p => {
-          if (p.method === 'upi') combinedUpi += p.amount || 0; else combinedCash += p.amount || 0;
+        // REVENUE FIX: earlier code merged the old partial payments AND today's
+        // collection into ONE set of entries dated TODAY. So collecting a
+        // ₹500 balance re-dated the ₹1,000 paid on 19/9 to today, and
+        // "Today's Collection" jumped by the whole ₹1,500. Now every payment
+        // keeps its own date and method; only the fee category (Plan /
+        // Admission / PT) is assigned now that the balance is cleared.
+        const chunks = [];
+        const chunkByKey = {};
+        partialEntries.forEach((p, i) => {
+          const key = p.groupId || p.receiptNo || `legacy-${i}`;
+          if (!chunkByKey[key]) {
+            chunkByKey[key] = { groupId: p.groupId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-l${i}`,
+                                receiptNo: p.receiptNo || `REC-DUE-${Date.now()}-${i}`, date: p.date, parts: [] };
+            chunks.push(chunkByKey[key]);
+          }
+          chunkByKey[key].parts.push({ method: p.method || 'cash', amount: p.amount || 0 });
         });
+
+        // today's collection = its own chunk, dated with the chosen payment date
+        const nowParts = [];
         if (method === 'split') {
           const upiNow = Math.max(0, Math.min(received, parseFloat(document.getElementById('splitUpiAmt')?.value) || 0));
-          combinedUpi += upiNow; combinedCash += (received - upiNow);
-        } else if (method === 'upi') {
-          combinedUpi += received;
-        } else {
-          combinedCash += received;
+          if (upiNow > 0) nowParts.push({ method: 'upi', amount: upiNow });
+          if (received - upiNow > 0) nowParts.push({ method: 'cash', amount: received - upiNow });
+        } else if (received > 0) {
+          nowParts.push({ method, amount: received });
         }
+        chunks.push({ groupId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-final`,
+                      receiptNo: `REC-DUE-${Date.now()}`, date: dateVal, parts: nowParts });
 
         const breakdown = {
           plan: Number(cached.planPrice) || 0,
           admission: (cached.admissionWaived ? 0 : (Number(cached.admissionFee) || 0)),
           pt: (cached.ptEnabled ? (Number(cached.ptFee) || 0) : 0)
         };
-        const finalEntries = finalizeFullBreakdownEntries(breakdown, { upi: combinedUpi, cash: combinedCash }, dateVal, 'REC-DUE');
+        const finalEntries = itemizeChunksByDate(breakdown, chunks);
         updatedHistory = [...keptEntries, ...finalEntries];
-        receiptForShare = finalEntries[0]?.receiptNo;
+        receiptForShare = finalEntries[finalEntries.length - 1]?.receiptNo;
       } else {
         // Still not fully paid — just log this collection as another
         // undifferentiated partial entry, same as the original payment.
