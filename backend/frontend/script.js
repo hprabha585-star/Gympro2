@@ -1096,26 +1096,35 @@ async function openEditMember(id) {
     document.getElementById('edReason').value = member.discountReason || '';
     recalcEditPrice();
 
-    document.getElementById('eExpiry').value = member.expiryDate ? member.expiryDate.split('T')[0] : '';
-    {
-      const pd = document.getElementById('ePaymentDate');
-      const cur = member.lastPaymentDate ? payDay(member.lastPaymentDate) : '';
+    const expiryEl = document.getElementById('eExpiry');
+    if (expiryEl) expiryEl.value = member.expiryDate ? member.expiryDate.split('T')[0] : '';
+    
+    // Safety Check: Only set the Payment Date if the HTML field exists
+    const pd = document.getElementById('ePaymentDate');
+    if (pd) {
+      const cur = member.lastPaymentDate ? member.lastPaymentDate.split('T')[0] : '';
       pd.value = cur; pd.dataset.orig = cur; pd.max = getLocalTodayStr();
     }
-    { const w = document.getElementById('ePhoneWarn'); if (w) w.style.display = 'none'; }
+    
+    const w = document.getElementById('ePhoneWarn'); if (w) w.style.display = 'none';
     document.getElementById('eAdmFee').value  = member.admissionFee || '';
     document.getElementById('eWaive').value   = member.admissionWaived ? 'no' : 'yes';
 
     const ptEn = !!member.ptEnabled;
     document.getElementById('ePtEnabled').checked = ptEn;
-    document.getElementById('ePtDetails').style.display = ptEn ? 'block' : 'none';
+    
+    const ptDetails = document.getElementById('ePtDetails');
+    if (ptDetails) ptDetails.style.display = ptEn ? 'block' : 'none';
+    
     document.getElementById('ePtFee').value  = member.ptFee   || '';
     document.getElementById('ePtNotes').value= member.ptNotes || '';
 
     const ePtSel = document.getElementById('ePtTrainer');
-    ePtSel.innerHTML = '<option value="">Select Trainer</option>' +
-      Object.entries(trainerMap).map(([tid,tname]) => `<option value="${esc(tid)}">${esc(tname)}</option>`).join('');
-    ePtSel.value = member.ptTrainer || '';
+    if (ePtSel) {
+      ePtSel.innerHTML = '<option value="">Select Trainer</option>' +
+        Object.entries(trainerMap).map(([tid,tname]) => `<option value="${esc(tid)}">${esc(tname)}</option>`).join('');
+      ePtSel.value = member.ptTrainer || '';
+    }
 
     document.getElementById('eEcName').value = member.emergencyContact?.name || '';
     document.getElementById('eEcPhone').value = member.emergencyContact?.phone || '';
@@ -1126,13 +1135,13 @@ async function openEditMember(id) {
     const ePD = document.getElementById('ePhotoData');
     const eClr = document.getElementById('eClearPhotoBtn');
     if (member.photo && member.photo.startsWith('data:image')) {
-      ePrev.src = member.photo;
-      ePD.value = member.photo;
-      eClr.style.display = 'inline-flex';
+      if (ePrev) ePrev.src = member.photo;
+      if (ePD) ePD.value = member.photo;
+      if (eClr) eClr.style.display = 'inline-flex';
     } else {
-      ePrev.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231A8C8C22'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
-      ePD.value = '';
-      eClr.style.display = 'none';
+      if (ePrev) ePrev.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231A8C8C22'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
+      if (ePD) ePD.value = '';
+      if (eClr) eClr.style.display = 'none';
     }
 
     renderMemberAttendanceStats(id);
