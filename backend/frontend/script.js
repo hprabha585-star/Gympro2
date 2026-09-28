@@ -5,7 +5,7 @@ document.addEventListener('wheel', () => {
 }, { passive: true });
 
 /* ── CONFIG ── */
-const BASE        = 'https://olivedrab-snail-330464.hostingersite.com/api';
+const BASE        = '/api';
 const API         = `${BASE}/members`;
 const TAPI        = `${BASE}/trainers`;
 const PROFILE_API = `${BASE}/auth/profile`;
@@ -194,6 +194,8 @@ async function addGym(name) {
 function logout() { 
   localStorage.removeItem('token'); 
   localStorage.removeItem('user'); 
+  // SECURITY: wipe cached API responses so the next user on this device can't see them
+  try { if ('caches' in window) caches.delete('gympro-data-v4'); navigator.serviceWorker?.controller?.postMessage('CLEAR_DATA'); } catch(e) {}
   location.href='/login.html'; 
 }
 
@@ -279,7 +281,7 @@ function sortByExpiry(members) {
     const bA = b.status==='Active'||b.status==='Trial';
     if (aA && !bA) return -1;
     if (!aA && bA) return 1;
-    return new Date(a.expiryDate) - new Date(b.expiryDate);
+    return String(a.expiryDate||'').slice(0,10).localeCompare(String(b.expiryDate||'').slice(0,10));
   });
 }
 
@@ -584,9 +586,19 @@ function addCondition(containerId) {
 }
 
 /* ── REVENUE CALCULATION ── */
+/* DATE FIX: one place that turns a stored payment timestamp into a
+   'YYYY-MM-DD' calendar day. Payment dates are saved as UTC-midnight of the
+   day the user picked, so read those by their UTC date; anything with a real
+   time-of-day (legacy rows) is read in local time. Daily and monthly revenue
+   now always agree. */
+function payDay(v) {
+  const x = new Date(v);
+  if (isNaN(x)) return '';
+  if (x.getUTCHours() === 0 && x.getUTCMinutes() === 0 && x.getUTCSeconds() === 0) return x.toISOString().slice(0, 10);
+  return toLocalDateStr(x);
+}
 function getMonthKey(date) {
-  const d = new Date(date);
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  return payDay(date).slice(0, 7);
 }
 
 function calculateRevenue(members) {
@@ -659,7 +671,7 @@ function getRevenueForDate(members, dateStr) {
   members.forEach(m => {
     (m.paymentHistory || []).forEach(p => {
       if (!p.date) return;
-      const d = new Date(p.date).toISOString().split('T')[0];
+      const d = payDay(p.date);
       if (d !== dateStr) return;
       const amt = p.amount || 0;
       total += amt;
@@ -676,7 +688,7 @@ function getRevenueInRange(members, fromStr, toStr) {
   members.forEach(m => {
     (m.paymentHistory || []).forEach(p => {
       if (!p.date) return;
-      const d = new Date(p.date).toISOString().split('T')[0];
+      const d = payDay(p.date);
       if (fromStr && d < fromStr) return;
       if (toStr && d > toStr) return;
       const amt = p.amount || 0;
@@ -977,7 +989,7 @@ function _renderMemberCard(m, idx) {
         </div>
         <div style="font-size:.72rem;color:#8AABAB;margin-top:2px">
           <span style="font-weight:600">Payment Date: </span>
-          <span style="font-weight:700;color:#4A6464">${m.lastPaymentDate ? new Date(m.lastPaymentDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—'}</span>
+          <span style="font-weight:700;color:#4A6464">${m.lastPaymentDate ? new Date(payDay(m.lastPaymentDate)+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—'}</span>
         </div>
       </div>
       
@@ -1169,6 +1181,7 @@ document.getElementById('editMemberForm')?.addEventListener('submit', async e =>
     photo: document.getElementById('ePhotoData').value || ''
   };
 
+  if (!data.expiryDate) { toast('Expiry date is required','error'); return; }
   const btn = e.submitter; 
   if (btn) { btn.disabled=true; btn.textContent='Saving…'; }
   try {
@@ -1208,6 +1221,12 @@ document.getElementById('addMemberForm')?.addEventListener('submit', async e => 
 
   const paymentDate = document.getElementById('mPaymentDate').value;
   if (!paymentDate) { toast('Please select a payment date','error'); return; }
+  if (paymentDate > getLocalTodayStr()) { toast('Payment date cannot be in the future','error'); return; }
+  {
+    const s = document.getElementById('mStart').value, x = document.getElementById('mExpiry').value;
+    if (!s || !x) { toast('Start and expiry dates are required','error'); return; }
+    if (x <= s) { toast('Expiry date must be after the start date','error'); return; }
+  }
 
   const conditions=[];
   document.querySelectorAll('#condContainer .cond-row').forEach(row=>{
@@ -2493,7 +2512,7 @@ async function loadRevenuePage() {
                     </div>
                   `).join('')}
                   <div style="display:flex;justify-content:space-between;font-size:.65rem;color:#8AABAB;padding-top:2px;padding-right:85px;">
-                    <span>${tx.date ? new Date(tx.date).toLocaleDateString('en-IN') : '—'}</span>
+                    <span>${tx.date ? fmt(payDay(tx.date)) : '—'}</span>
                     <span style="font-weight:700;color:#1A8C8C">${tx.methodSummary}</span>
                   </div>
                   <div style="position:absolute; right:0; top:50%; transform:translateY(-50%); display:flex; gap:6px;">
@@ -3224,6 +3243,9 @@ async function confirmPayment() {
   const method = curPayMethod;
   const total = curPayTotal || 0;
   const paymentDate = document.getElementById('payRenewalPayDate')?.value || getLocalTodayStr();
+  // DATE FIX: a payment cannot be dated in the future (this is what produced
+  // "Payment Date: 15 Oct" while today is 28 Sep).
+  if (paymentDate > getLocalTodayStr()) { toast('Payment date cannot be in the future','error'); return; }
 
   // ── Collecting a pending/due balance (not a new payment or renewal) ──
   if (curPayMember.mode === 'due') {
@@ -3348,7 +3370,7 @@ async function confirmPayment() {
     if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
     let addedMemberForReceipt = null;
     try {
-      await fetch(`${API}/${curPayMember.id}`, {
+      const payRes = await fetch(`${API}/${curPayMember.id}`, {
         method: 'PUT', headers: hdrs(),
         body: JSON.stringify({
           paymentHistory: entries,
@@ -3358,6 +3380,7 @@ async function confirmPayment() {
           pendingAmount: pendingNew
         })
       });
+      if (!payRes.ok) throw new Error('Payment not saved (server ' + payRes.status + ')');
       const methodLabel = { upi:'📱 UPI', cash:'💵 Cash', card:'💳 Card' }[method] || method;
       toast(pendingNew > 0
         ? `✅ Member added — ${methodLabel} ₹${receivedNew.toLocaleString('en-IN')} received, ₹${pendingNew.toLocaleString('en-IN')} pending`
@@ -3803,18 +3826,17 @@ function shareLastReceipt(memberId) {
     toast('No payment history to share yet', 'error');
     return;
   }
-  const last = [...m.paymentHistory].sort((a,b) => new Date(b.date) - new Date(a.date))[0];
+  const last = [...m.paymentHistory].sort((a,b) => payDay(b.date).localeCompare(payDay(a.date)))[0];
   showReceiptOptions(memberId, m.name, last.amount, m.pendingAmount || 0, last.method, last.receiptNo);
 }
 
 async function sendPaymentReminder(memberId, phone, name) {
   try {
     const m = allMembersCache.find(x => (x._id||x.id) === memberId) || {};
-    const expDate = m.expiryDate ? new Date(m.expiryDate).toLocaleDateString('en-IN') : 'soon';
+    const expDate = m.expiryDate ? fmt(m.expiryDate) : 'soon';
     const plan = m.plan || 'your plan';
     const today = new Date(); today.setHours(0,0,0,0);
-    const exp = m.expiryDate ? new Date(m.expiryDate) : null;
-    exp && exp.setHours(0,0,0,0);
+    const exp = m.expiryDate ? (q => new Date(+q[0], +q[1]-1, +q[2]))(m.expiryDate.split('T')[0].split('-')) : null;
     const daysLeft = exp ? Math.ceil((exp - today) / (1000*60*60*24)) : null;
 
     let urgencyLine = '';
