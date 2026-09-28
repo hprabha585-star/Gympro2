@@ -6,6 +6,15 @@ const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
 
+// DATE FIX: the server runs in UTC, so new Date().toISOString().split('T')[0]
+// returned YESTERDAY for Indian users between 12:00am and 5:30am IST.
+// Compute the calendar date in the gym's timezone instead.
+const GYM_TZ = process.env.GYM_TIMEZONE || 'Asia/Kolkata';
+function todayStr(offsetDays = 0) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: GYM_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+
 // Get all members (only current user's members)
 router.get('/', async (req, res) => {
   try {
@@ -21,7 +30,7 @@ router.get('/', async (req, res) => {
 router.get('/stats', async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayStr();
 
     // Run the independent counts/queries in parallel instead of one after
     // another — this endpoint used to pay 3 sequential DB round trips
@@ -127,7 +136,10 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
-    const memberData = req.body;
+    const memberData = { ...req.body };
+    // SECURITY/DATE FIX: never let the client overwrite ownership or
+    // server-managed columns via a PUT body.
+    ['id', '_id', 'userId', 'createdAt', 'updatedAt', 'paymentDate'].forEach(k => delete memberData[k]);
 
     const photoErr = checkPhotoSize(memberData.photo);
     if (photoErr) return res.status(400).json({ error: photoErr });
@@ -207,6 +219,9 @@ router.delete('/:id/payment/:groupId', async (req, res) => {
     }
 
     member.paymentHistory = filteredHistory;
+    // DATE FIX: keep "Payment Date" in sync with what's actually left in the history
+    const remainingDates = filteredHistory.map(p => new Date(p.date)).filter(d => !isNaN(d));
+    member.lastPaymentDate = remainingDates.length ? new Date(Math.max(...remainingDates)) : null;
     
     // ZOMBIE CLEANUP: If soft-deleted member has their last remaining payment deleted, hard delete them
     if (member.isDeleted && filteredHistory.length === 0 && Number(member.pendingAmount) <= 0) {
