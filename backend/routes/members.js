@@ -87,7 +87,10 @@ function checkPhotoSize(photo) {
 router.post('/', async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
-    const memberData = req.body;
+    const memberData = { ...req.body };
+    // one clean 10-digit phone, so "+91 98765 43210" and "9876543210" are the same person
+    memberData.phone = Member.normalizePhone(memberData.phone);
+    ['id', '_id', 'userId', 'createdAt', 'updatedAt', 'isDeleted'].forEach(k => delete memberData[k]);
 
     const photoErr = checkPhotoSize(memberData.photo);
     if (photoErr) return res.status(400).json({ error: photoErr });
@@ -106,7 +109,7 @@ router.post('/', async (req, res) => {
     ]);
 
     if (existingMember) {
-      return res.status(400).json({ error: 'Member with this phone number already exists' });
+      return res.status(409).json({ error: `This phone number is already registered in this gym (${existingMember.name}, ID #${existingMember.memberNo || existingMember.id}). Use a different number or open that member.` });
     }
 
     let memberLimit = gymOwner ? gymOwner.memberLimit : null;
@@ -136,10 +139,38 @@ router.post('/', async (req, res) => {
     }
     if (err.parent) console.error('❌ Add member error — DB detail:', err.parent.sqlMessage || err.parent.message);
 
+    // two requests racing past the check above are stopped by the unique (gym, phone) index
+    if (err.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ error: 'This phone number is already registered in this gym.' });
+    }
     const detail = (err.errors && err.errors[0]?.message) || err.parent?.sqlMessage || err.message || 'Unknown error';
     res.status(400).json({ error: detail });
   }
 });
+
+// Moves the member's LATEST payment (one whole transaction) to a new date and
+// re-syncs lastPaymentDate, so the card, payment history and every revenue
+// report (which read the history) all agree. Returns the fields to save.
+function paymentDateEdit(member, dateStr) {
+  const newIso = new Date(dateStr + 'T00:00:00.000Z').toISOString();
+  const hist = (Array.isArray(member.paymentHistory) ? member.paymentHistory : []).map(p => ({ ...p }));
+  if (hist.length) {
+    const t = p => new Date(p.date).getTime() || 0;
+    let latest = hist[0];
+    hist.forEach(p => { if (t(p) >= t(latest)) latest = p; });
+    const key = p => p.groupId || p.receiptNo || null;
+    const k = key(latest);
+    hist.forEach(p => {
+      // same transaction = same groupId/receiptNo; legacy rows without either = same timestamp
+      if (p === latest || (k ? key(p) === k : p.date === latest.date)) p.date = newIso;
+    });
+  }
+  const times = hist.map(p => new Date(p.date).getTime()).filter(n => !isNaN(n));
+  return {
+    paymentHistory: hist,
+    lastPaymentDate: times.length ? new Date(Math.max(...times)) : new Date(newIso)
+  };
+}
 
 // Edit / Update an existing member
 router.put('/:id', async (req, res) => {
@@ -149,6 +180,15 @@ router.put('/:id', async (req, res) => {
     // SECURITY/DATE FIX: never let the client overwrite ownership or
     // server-managed columns via a PUT body.
     ['id', '_id', 'userId', 'createdAt', 'updatedAt', 'paymentDate'].forEach(k => delete memberData[k]);
+    if (memberData.phone !== undefined) memberData.phone = Member.normalizePhone(memberData.phone);
+    const editPaymentDate = memberData.editPaymentDate;
+    delete memberData.editPaymentDate;
+    if (editPaymentDate !== undefined && editPaymentDate !== null && editPaymentDate !== '') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(editPaymentDate) || isNaN(new Date(editPaymentDate + 'T00:00:00Z')))
+        return res.status(400).json({ error: 'Invalid payment date' });
+      if (editPaymentDate > todayStr())
+        return res.status(400).json({ error: 'Payment date cannot be in the future' });
+    }
 
     const photoErr = checkPhotoSize(memberData.photo);
     if (photoErr) return res.status(400).json({ error: photoErr });
@@ -164,14 +204,17 @@ router.put('/:id', async (req, res) => {
     ]);
 
     if (memberData.phone && existingMember) {
-      return res.status(400).json({ error: 'Another member with this phone number already exists' });
+      return res.status(409).json({ error: `Another member in this gym already has this phone number (${existingMember.name}, ID #${existingMember.memberNo || existingMember.id}).` });
     }
     if (!member) return res.status(404).json({ error: 'Member not found' });
+
+    if (editPaymentDate) Object.assign(memberData, paymentDateEdit(member, editPaymentDate));
 
     await member.update(memberData);
     res.json(member);
   } catch (err) {
     console.error('Update member error:', err);
+    if (err.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ error: 'Another member in this gym already has this phone number.' });
     res.status(500).json({ error: err.message });
   }
 });
