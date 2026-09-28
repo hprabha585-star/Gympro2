@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Attendance } = require('../models');
+const { Attendance, Member } = require('../models');
 const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
@@ -34,6 +34,11 @@ router.post('/', async (req, res) => {
 
     if (!userId) return res.status(400).json({ error: 'Authentication token missing User ID' });
     if (!memberId || !status || !date) return res.status(400).json({ error: 'Missing required attendance fields' });
+    if (!['Present', 'Absent'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date (use YYYY-MM-DD)' });
+    // members can only be marked inside the active gym
+    const owned = await Member.findOne({ where: { id: memberId, userId } });
+    if (!owned) return res.status(404).json({ error: 'Member not found' });
 
     let attendance = await Attendance.findOne({ where: { userId, memberId, date } });
 
