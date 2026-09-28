@@ -89,7 +89,7 @@ router.post('/', async (req, res) => {
     const gymId = req.user.gymId || req.user.userId;
     const memberData = { ...req.body };
     // one clean 10-digit phone, so "+91 98765 43210" and "9876543210" are the same person
-    memberData.phone = Member.normalizePhone(memberData.phone);
+    memberData.phone = String(memberData.phone || '').replace(/\D/g, '').slice(-10);
     ['id', '_id', 'userId', 'createdAt', 'updatedAt', 'isDeleted'].forEach(k => delete memberData[k]);
 
     const photoErr = checkPhotoSize(memberData.photo);
@@ -180,7 +180,7 @@ router.put('/:id', async (req, res) => {
     // SECURITY/DATE FIX: never let the client overwrite ownership or
     // server-managed columns via a PUT body.
     ['id', '_id', 'userId', 'createdAt', 'updatedAt', 'paymentDate'].forEach(k => delete memberData[k]);
-    if (memberData.phone !== undefined) memberData.phone = Member.normalizePhone(memberData.phone);
+    if (memberData.phone !== undefined) memberData.phone = String(memberData.phone || '').replace(/\D/g, '').slice(-10);
     const editPaymentDate = memberData.editPaymentDate;
     delete memberData.editPaymentDate;
     if (editPaymentDate !== undefined && editPaymentDate !== null && editPaymentDate !== '') {
