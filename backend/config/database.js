@@ -9,6 +9,7 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 3306,
     dialect: 'mysql',
+    timezone: '+00:00', // DATE FIX: store/read every DATETIME as UTC, regardless of the host's timezone
     logging: false,
     pool: { max: 10, min: 0, acquire: 30000, idle: 10000 }
   }
