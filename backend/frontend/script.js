@@ -218,8 +218,26 @@ const fmt = d => {
 };
 
 function getLocalTodayStr() {
-  const d = new Date();
+  return toLocalDateStr(new Date());
+}
+
+/* DATE FIX: format a Date using its LOCAL y/m/d. Never use
+   date.toISOString().split('T')[0] on a local-midnight Date — in India
+   (UTC+5:30) that returns the PREVIOUS day, which silently shifted every
+   renewal/expiry date back by one day. */
+function toLocalDateStr(d) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+/* DATE FIX: add N months but clamp to the month's last day (31 Jan + 1 month
+   = 28/29 Feb, not 3 Mar as plain setMonth() gives). Mutates and returns d. */
+function addMonthsClamped(d, months) {
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + months);
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, last));
+  return d;
 }
 
 /* ── PLAN HELPERS ── */
@@ -418,10 +436,16 @@ const openModal = id => {
   el.classList.add('open');
   _setModalHeight(el);
   if (id === 'addMemberModal') {
-    const startInput = document.getElementById('mStart');
-    if (startInput) { startInput.value = getLocalTodayStr(); onPlanChange(); }
-    const payDate = document.getElementById('mPaymentDate');
-    if (payDate) payDate.value = getLocalTodayStr();
+    // DATE FIX: when "Back to Edit" re-opens this modal, the dates the user
+    // already chose were being reset to today (and expiry recalculated).
+    if (window._keepAddMemberDates) {
+      window._keepAddMemberDates = false;
+    } else {
+      const startInput = document.getElementById('mStart');
+      if (startInput) { startInput.value = getLocalTodayStr(); onPlanChange(); }
+      const payDate = document.getElementById('mPaymentDate');
+      if (payDate) payDate.value = getLocalTodayStr();
+    }
   }
   const mbox = el.querySelector('.mbox');
   if (mbox) mbox.scrollTop = 0;
@@ -535,11 +559,9 @@ function onPlanChange() {
     startInput.value = getLocalTodayStr();
   }
 
-  sd.setMonth(sd.getMonth() + months);
+  addMonthsClamped(sd, months);
   const expiryEl = document.getElementById('mExpiry');
-  if (expiryEl) {
-    expiryEl.value = sd.getFullYear() + '-' + String(sd.getMonth()+1).padStart(2,'0') + '-' + String(sd.getDate()).padStart(2,'0');
-  }
+  if (expiryEl) expiryEl.value = toLocalDateStr(sd);
   recalcPrice();
 }
 
@@ -1759,7 +1781,7 @@ Object.keys(_attCache).forEach(date => {
     .sort().reverse();
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const today = new Date(); today.setHours(0,0,0,0);
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = toLocalDateStr(today);
   const daysInMonth = (y,m) => new Date(y, m, 0).getDate();
 
   if (!calWrap) return;
@@ -2773,7 +2795,7 @@ function updateRenewalDates() {
       const d = new Date(+p[0], +p[1]-1, +p[2]);
       if (d > today) startDefault = d;
     }
-    startEl.value = startDefault.toISOString().split('T')[0];
+    startEl.value = toLocalDateStr(startDefault);
   }
   updateRenewalExpiry();
 }
@@ -2787,8 +2809,8 @@ function updateRenewalExpiry() {
   const months = getPlanMonths(planName);
   const p = startEl.value.split('-');
   const d = new Date(+p[0], +p[1]-1, +p[2]);
-  d.setMonth(d.getMonth() + months);
-  expiryEl.value = d.toISOString().split('T')[0];
+  addMonthsClamped(d, months);
+  expiryEl.value = toLocalDateStr(d);
 }
 
 function selectPayMethod(method) {
@@ -3154,8 +3176,8 @@ async function goBackFromPayment() {
   document.getElementById('mPtNotes').value = m.ptNotes || '';
   togglePT('mPtDetails');
   
-  document.getElementById('mStart').value = m.joinDate || '';
-  document.getElementById('mExpiry').value = m.expiryDate || '';
+  document.getElementById('mStart').value = (m.joinDate || '').split('T')[0];
+  document.getElementById('mExpiry').value = (m.expiryDate || '').split('T')[0];
   document.getElementById('mPaymentDate').value = m.paymentDate || '';
   document.getElementById('mStatus').value = m.status || 'Active';
   
@@ -3190,7 +3212,8 @@ async function goBackFromPayment() {
     });
   }
 
-  // 4. Re-open Add modal so the user can edit
+  // 4. Re-open Add modal so the user can edit (keep the restored dates)
+  window._keepAddMemberDates = true;
   openModal('addMemberModal');
 }
 
@@ -3372,8 +3395,8 @@ async function confirmPayment() {
       const d = new Date(+p[0], +p[1]-1, +p[2]);
       if (d > new Date()) baseDate = d;
     }
-    baseDate.setMonth(baseDate.getMonth() + getPlanMonths(planName));
-    return baseDate.toISOString().split('T')[0];
+    addMonthsClamped(baseDate, getPlanMonths(planName));
+    return toLocalDateStr(baseDate);
   })();
 
   // FIX: split `total` so the plan entry doesn't also contain the PT fee
