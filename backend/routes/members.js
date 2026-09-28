@@ -15,6 +15,15 @@ function todayStr(offsetDays = 0) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: GYM_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 }
 
+// SECURITY FIX: the staff "deleteMembers" permission was only hidden in the
+// UI; anyone with a staff token could still call DELETE directly.
+function requireDelete(req, res, next) {
+  if (req.user.role === 'staff' && !(req.user.permissions && req.user.permissions.deleteMembers)) {
+    return res.status(403).json({ error: 'You do not have permission to delete.' });
+  }
+  next();
+}
+
 // Get all members (only current user's members)
 router.get('/', async (req, res) => {
   try {
@@ -169,7 +178,7 @@ router.put('/:id', async (req, res) => {
 
 // Delete member
 // Delete member (Soft delete to preserve revenue history)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireDelete, async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
     const member = await Member.findOne({ where: { id: req.params.id, userId: gymId } });
@@ -196,7 +205,7 @@ router.delete('/:id', async (req, res) => {
 
 // NEW: Delete specific payment from history
 // Delete specific payment from history (Supports both new Group IDs and Legacy Single records)
-router.delete('/:id/payment/:groupId', async (req, res) => {
+router.delete('/:id/payment/:groupId', requireDelete, async (req, res) => {
   try {
     const gymId = req.user.gymId || req.user.userId;
     const member = await Member.findOne({ where: { id: req.params.id, userId: gymId } });
@@ -310,7 +319,7 @@ router.get('/payment-reminders', async (req, res) => {
       where: {
         userId: gymId,
         status: 'Active',
-        expiryDate: { [Op.lte]: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }
+        expiryDate: { [Op.lte]: new Date(todayStr(7) + 'T00:00:00.000Z') }
       }
     });
 
@@ -339,14 +348,15 @@ router.get('/monthly-due/:memberId', async (req, res) => {
     };
 
     const monthlyAmount = planPrices[member.plan] || 0;
-    const isDue = member.expiryDate && new Date(member.expiryDate) < new Date();
+    const expStr = member.expiryDate ? new Date(member.expiryDate).toISOString().slice(0, 10) : null;
+    const isDue = !!expStr && expStr < todayStr();
 
     res.json({
       memberName: member.name,
       monthlyAmount: Math.round(monthlyAmount),
       nextDueDate: member.expiryDate,
       isOverdue: isDue,
-      daysOverdue: isDue ? Math.floor((new Date() - new Date(member.expiryDate)) / (1000 * 60 * 60 * 24)) : 0
+      daysOverdue: isDue ? Math.round((new Date(todayStr() + 'T00:00:00Z') - new Date(expStr + 'T00:00:00Z')) / 86400000) : 0
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -365,6 +375,21 @@ router.post('/send-reminder/:memberId', async (req, res) => {
     await member.save();
 
     res.json({ message: 'Reminder timestamp updated successfully', lastReminderSent: member.lastReminderSent });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get ONE member. (The frontend calls GET /members/:id after deleting a
+// payment; this route didn't exist, so the request fell through to the SPA
+// catch-all and returned index.html -> "Network error".) Must stay LAST so it
+// doesn't shadow /stats, /payment-reminders etc.
+router.get('/:id', async (req, res) => {
+  try {
+    const gymId = req.user.gymId || req.user.userId;
+    const member = await Member.findOne({ where: { id: req.params.id, userId: gymId } });
+    if (!member) return res.status(404).json({ error: 'Member not found' });
+    res.json(member);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
