@@ -4,6 +4,15 @@ const { Member, Attendance, User, Gym } = require('../models');
 const { Op } = require('sequelize');
 const authMiddleware = require('../middleware/auth');
 
+// DATE FIX: the server runs in UTC, so new Date().toISOString().split('T')[0]
+// returned YESTERDAY for Indian users between 12:00am and 5:30am IST.
+// Compute the calendar date in the gym's timezone instead.
+const GYM_TZ = process.env.GYM_TIMEZONE || 'Asia/Kolkata';
+function todayStr(offsetDays = 0) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: GYM_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+
 // Generate GYM QR code (for the gym entrance)
 router.get('/gym-qr', authMiddleware, async (req, res) => {
   try {
@@ -94,9 +103,9 @@ router.post('/member-checkin', async (req, res) => {
       }
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const today = todayStr();
 
-    const existingAttendance = await Attendance.findOne({ where: { userId: gymId, memberId: member.id, date: todayStr } });
+    const existingAttendance = await Attendance.findOne({ where: { userId: gymId, memberId: member.id, date: today } });
 
     if (existingAttendance && existingAttendance.status === 'Present') {
       return res.json({
@@ -117,12 +126,12 @@ router.post('/member-checkin', async (req, res) => {
       attendance = await existingAttendance.save();
     } else {
       attendance = await Attendance.create({
-        userId: gymId, memberId: member.id, date: todayStr,
+        userId: gymId, memberId: member.id, date: today,
         status: 'Present', markedAt: new Date(), checkinMethod: 'qr_member'
       });
     }
 
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const weekAgo = todayStr(-7);
     const lastWeekAttendances = await Attendance.findAll({
       where: { userId: gymId, memberId: member.id, date: { [Op.gte]: weekAgo } }
     });
@@ -167,9 +176,7 @@ router.post('/my-attendance', async (req, res) => {
     }
     if (!member) return res.status(404).json({ error: 'Member not found' });
 
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 30);
-    const startDateStr = startDate.toISOString().split('T')[0];
+    const startDateStr = todayStr(-30);
 
     const attendances = await Attendance.findAll({
       where: { userId: gymId, memberId: member.id, date: { [Op.gte]: startDateStr } },
@@ -194,10 +201,10 @@ router.post('/my-attendance', async (req, res) => {
 router.get('/today-checkins', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.gymId || req.user.userId;
-    const todayStr = new Date().toISOString().split('T')[0];
+    const today = todayStr();
 
     const checkins = await Attendance.findAll({
-      where: { userId, date: todayStr, status: 'Present' },
+      where: { userId, date: today, status: 'Present' },
       include: [{ model: Member, as: 'member', attributes: ['id', 'name', 'phone', 'plan'] }]
     });
 
@@ -212,7 +219,7 @@ router.get('/today-checkins', authMiddleware, async (req, res) => {
         method: c.checkinMethod
       }));
 
-    res.json({ date: todayStr, totalCheckins: members.length, members });
+    res.json({ date: today, totalCheckins: members.length, members });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
