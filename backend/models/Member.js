@@ -1,6 +1,26 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
+// DATE FIX: expiry / join / payment dates are CALENDAR days, not instants.
+// Whatever arrives ('2026-10-21', a full ISO string, a Date), store it as
+// UTC-midnight of that calendar day (as seen in the gym's timezone). That way
+// the day shown never shifts by one depending on server/browser timezone, and
+// the frontend's `.split('T')[0]` always gets the right day.
+const GYM_TZ = process.env.GYM_TIMEZONE || 'Asia/Kolkata';
+function normDate(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return new Date(v + 'T00:00:00.000Z');
+  const d = new Date(v);
+  if (isNaN(d)) return v; // let Sequelize validation reject it
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: GYM_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  return new Date(day + 'T00:00:00.000Z');
+}
+const dateCol = (name, extra = {}) => ({
+  type: DataTypes.DATE,
+  ...extra,
+  set(value) { this.setDataValue(name, normDate(value)); }
+});
+
 const Member = sequelize.define('Member', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   userId: { type: DataTypes.INTEGER, allowNull: false },
@@ -38,10 +58,10 @@ phone: {
   ptTrainer: { type: DataTypes.STRING, defaultValue: '' },
   ptNotes: { type: DataTypes.STRING, defaultValue: '' },
 
-  joinDate: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
-  expiryDate: { type: DataTypes.DATE, allowNull: false },
-  lastPaymentDate: { type: DataTypes.DATE, allowNull: true },
-  nextPaymentDue: { type: DataTypes.DATE, allowNull: true },
+  joinDate: dateCol('joinDate', { defaultValue: () => normDate(new Date()) }),
+  expiryDate: dateCol('expiryDate', { allowNull: false }),
+  lastPaymentDate: dateCol('lastPaymentDate', { allowNull: true }),
+  nextPaymentDue: dateCol('nextPaymentDue', { allowNull: true }),
   lastReminderSent: { type: DataTypes.DATE, allowNull: true },
 
   lastPaymentMethod: { type: DataTypes.ENUM('upi', 'cash', 'card'), allowNull: true },
@@ -89,4 +109,5 @@ Member.prototype.toJSON = function () {
   return values;
 };
 
+Member.normDate = normDate;
 module.exports = Member;
