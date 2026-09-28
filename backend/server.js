@@ -36,7 +36,10 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'API route not found
 // together with the code on every GitHub push (no manual file uploads
 // to a separate filesystem needed).
 const frontendPath = path.join(__dirname, 'frontend');
-app.use(express.static(frontendPath));
+app.use(express.static(frontendPath, {
+  // Always revalidate app files so a redeploy is picked up immediately
+  setHeaders: (res, p) => { if (/\.(html|js|css|json)$/.test(p)) res.setHeader('Cache-Control', 'no-cache'); }
+}));
 app.get('/', (req, res) => res.sendFile(path.join(frontendPath, 'index.html')));
 app.get('*', (req, res) => res.sendFile(path.join(frontendPath, 'index.html')));
 
