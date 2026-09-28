@@ -1097,6 +1097,12 @@ async function openEditMember(id) {
     recalcEditPrice();
 
     document.getElementById('eExpiry').value = member.expiryDate ? member.expiryDate.split('T')[0] : '';
+    {
+      const pd = document.getElementById('ePaymentDate');
+      const cur = member.lastPaymentDate ? payDay(member.lastPaymentDate) : '';
+      pd.value = cur; pd.dataset.orig = cur; pd.max = getLocalTodayStr();
+    }
+    { const w = document.getElementById('ePhoneWarn'); if (w) w.style.display = 'none'; }
     document.getElementById('eAdmFee').value  = member.admissionFee || '';
     document.getElementById('eWaive').value   = member.admissionWaived ? 'no' : 'yes';
 
@@ -1139,6 +1145,7 @@ document.getElementById('editMemberForm')?.addEventListener('submit', async e =>
   const id = document.getElementById('editMemberId').value;
   const phone = document.getElementById('ePhone').value.trim();
   if (!/^\d{10}$/.test(phone)) { toast('Enter valid 10-digit phone','error'); return; }
+  { const dup = findDuplicatePhone(phone, id); if (dup) { toast(dupMessage(dup), 'error'); return; } }
 
   const sel = document.getElementById('ePlan');
   const origPrice = parseInt(sel.options[sel.selectedIndex]?.getAttribute('data-price')) || getPlanPrice(sel.value);
@@ -1183,6 +1190,13 @@ document.getElementById('editMemberForm')?.addEventListener('submit', async e =>
   };
 
   if (!data.expiryDate) { toast('Expiry date is required','error'); return; }
+  {
+    const pd = document.getElementById('ePaymentDate');
+    if (pd && pd.value && pd.value !== pd.dataset.orig) {
+      if (pd.value > getLocalTodayStr()) { toast('Payment date cannot be in the future','error'); return; }
+      data.editPaymentDate = pd.value;   // server moves the latest payment to this date
+    }
+  }
   const btn = e.submitter; 
   if (btn) { btn.disabled=true; btn.textContent='Saving…'; }
   try {
@@ -1198,11 +1212,37 @@ document.getElementById('editMemberForm')?.addEventListener('submit', async e =>
   if (btn) { btn.disabled=false; btn.textContent='Save Changes'; }
 });
 
+/* ── DUPLICATE PHONE GUARD ──
+   A phone number can only exist once per gym. Checked instantly against the
+   loaded member list (soft-deleted members are ignored); the server enforces
+   the same rule, so this is just for a fast, friendly message. */
+function findDuplicatePhone(phone, exceptId) {
+  const p = String(phone || '').replace(/\D/g, '').slice(-10);
+  if (p.length !== 10) return null;
+  return (allMembersCache || []).find(m => !m.isDeleted && String(m.phone) === p &&
+    String(m._id || m.id) !== String(exceptId || '')) || null;
+}
+function dupMessage(m) {
+  return `This number is already registered: ${m.name} (ID #${m.memberNo || m.id})`;
+}
+function wirePhoneGuard(inputId, warnId, getExceptId) {
+  const inp = document.getElementById(inputId), warn = document.getElementById(warnId);
+  if (!inp || !warn) return;
+  inp.addEventListener('input', () => {
+    const dup = findDuplicatePhone(inp.value, getExceptId());
+    warn.style.display = dup ? 'block' : 'none';
+    warn.textContent = dup ? '⚠️ ' + dupMessage(dup) : '';
+  });
+}
+wirePhoneGuard('mPhone', 'mPhoneWarn', () => null);
+wirePhoneGuard('ePhone', 'ePhoneWarn', () => document.getElementById('editMemberId')?.value);
+
 /* ── ADD MEMBER SUBMIT ── */
 document.getElementById('addMemberForm')?.addEventListener('submit', async e => {
   e.preventDefault();
   const phone=document.getElementById('mPhone').value.trim();
   if(!/^\d{10}$/.test(phone)){toast('Enter valid 10-digit phone','error');return;}
+  { const dup = findDuplicatePhone(phone, null); if (dup) { toast(dupMessage(dup), 'error'); return; } }
   const gender=document.getElementById('mGender').value;
   if(!gender){toast('Select gender','error');return;}
 
@@ -1268,6 +1308,7 @@ document.getElementById('addMemberForm')?.addEventListener('submit', async e => 
       const added=await res.json();
       closeModal('addMemberModal');
       e.target.reset();
+      { const w = document.getElementById('mPhoneWarn'); if (w) w.style.display = 'none'; }
       document.getElementById('condContainer').innerHTML='';
       document.getElementById('mPtEnabled').checked=false;
       document.getElementById('mPtDetails').style.display='none';
