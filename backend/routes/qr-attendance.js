@@ -21,14 +21,16 @@ router.get('/gym-qr', authMiddleware, async (req, res) => {
 
     let gymName = 'GymPro';
 
-    // Isolated QR generation
-    if (Number(gymId) === Number(userId)) {
-      const user = await User.findByPk(userId);
-      if (!user) return res.status(404).json({ error: 'Primary gym not found' });
-      gymName = user.name || user.gymName || 'GymPro';
+    // FIX: staff tokens carry gymId = the OWNER's user id, so the old
+    // "gymId === userId ? User : Gym" test sent staff to the Gym table and
+    // returned 404 (that's why gym-qr.html needed a client-side fallback).
+    // Look in Users first (primary gyms), then the Gym table (extra gyms).
+    const ownerRow = await User.findByPk(gymId);
+    if (ownerRow && ownerRow.role === 'admin') {
+      gymName = ownerRow.gymName || ownerRow.name || 'GymPro';
     } else {
       const gym = await Gym.findByPk(gymId);
-      if (!gym) return res.status(404).json({ error: 'Additional gym not found' });
+      if (!gym) return res.status(404).json({ error: 'Gym not found' });
       gymName = gym.name;
     }
 
@@ -41,8 +43,9 @@ router.get('/gym-qr', authMiddleware, async (req, res) => {
 
     const encodedData = Buffer.from(JSON.stringify(qrData)).toString('base64');
 
-    // ⚠️ Update this to your new domain once you move off Render
-    const checkinUrl = `https://olivedrab-snail-330464.hostingersite.com/member-checkin.html?qr=${encodeURIComponent(encodedData)}`;
+    // Base URL: set PUBLIC_URL in .env (e.g. https://yourdomain.com); falls back to the request's own host.
+    const baseUrl = (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+    const checkinUrl = `${baseUrl}/member-checkin.html?qr=${encodeURIComponent(encodedData)}`;
 
     res.json({
       qrString: checkinUrl,
@@ -77,13 +80,13 @@ router.post('/member-checkin', async (req, res) => {
 
     let member;
     if (memberId) {
-      member = await Member.findOne({ where: { memberNo: memberId, userId: gymId } });
-      if (!member) {
-        member = await Member.findOne({ where: { id: memberId, userId: gymId } });
-      }
+      // SECURITY FIX: only match the public Member ID (memberNo). The old
+      // fallback to the internal row id let anyone type 1,2,3... and check
+      // in other people.
+      member = await Member.findOne({ where: { memberNo: parseInt(memberId, 10) || -1, userId: gymId, isDeleted: false } });
     } else if (phoneNumber) {
       const cleanPhone = String(phoneNumber).replace(/[^0-9]/g, '');
-      member = await Member.findOne({ where: { phone: cleanPhone, userId: gymId } });
+      member = await Member.findOne({ where: { phone: cleanPhone, userId: gymId, isDeleted: false } });
     }
 
     if (!member) {
@@ -95,11 +98,13 @@ router.post('/member-checkin', async (req, res) => {
     }
 
     if (member.expiryDate) {
-      const expiryDate = new Date(member.expiryDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (expiryDate < today) {
-        return res.status(403).json({ error: 'Membership expired on ' + expiryDate.toLocaleDateString() + '. Please renew.' });
+      // DATE FIX: compare calendar days in the gym's timezone (the old code
+      // compared server-local midnights, so on IST mornings an expired
+      // member could still check in).
+      const expStr = new Date(member.expiryDate).toISOString().slice(0, 10);
+      if (expStr < todayStr()) {
+        const [y, mo, d] = expStr.split('-');
+        return res.status(403).json({ error: `Membership expired on ${d}/${mo}/${y}. Please renew.` });
       }
     }
 
@@ -166,13 +171,13 @@ router.post('/my-attendance', async (req, res) => {
 
     let member;
     if (memberId) {
-      member = await Member.findOne({ where: { memberNo: memberId, userId: gymId } });
-      if (!member) {
-        member = await Member.findOne({ where: { id: memberId, userId: gymId } });
-      }
+      // SECURITY FIX: only match the public Member ID (memberNo). The old
+      // fallback to the internal row id let anyone type 1,2,3... and check
+      // in other people.
+      member = await Member.findOne({ where: { memberNo: parseInt(memberId, 10) || -1, userId: gymId, isDeleted: false } });
     } else if (phoneNumber) {
       const cleanPhone = String(phoneNumber).replace(/[^0-9]/g, '');
-      member = await Member.findOne({ where: { phone: cleanPhone, userId: gymId } });
+      member = await Member.findOne({ where: { phone: cleanPhone, userId: gymId, isDeleted: false } });
     }
     if (!member) return res.status(404).json({ error: 'Member not found' });
 
