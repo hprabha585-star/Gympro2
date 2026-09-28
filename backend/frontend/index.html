@@ -811,6 +811,7 @@
         <div class="form-group">
           <label>Phone * (10 digits)</label>
           <input type="tel" id="mPhone" required placeholder="9876543210" maxlength="10" inputmode="numeric">
+          <div id="mPhoneWarn" style="display:none;margin-top:6px;padding:8px 10px;border-radius:10px;background:#FDECEA;color:#C0392B;font-size:.75rem;font-weight:700"></div>
         </div>
         <div class="form-group">
           <label>Email</label>
@@ -994,7 +995,7 @@
       <div class="form-sep">👤 Basic Info</div>
       <div class="form-grid">
         <div class="form-group"><label>Full Name *</label><input type="text" id="eName" required></div>
-        <div class="form-group"><label>Phone * (10 digits)</label><input type="tel" id="ePhone" required maxlength="10" inputmode="numeric"></div>
+        <div class="form-group"><label>Phone * (10 digits)</label><input type="tel" id="ePhone" required maxlength="10" inputmode="numeric"><div id="ePhoneWarn" style="display:none;margin-top:6px;padding:8px 10px;border-radius:10px;background:#FDECEA;color:#C0392B;font-size:.75rem;font-weight:700"></div></div>
         <div class="form-group"><label>Email</label><input type="email" id="eEmail"></div>
         <div class="form-group"><label>Age</label><input type="text" id="eAge" inputmode="numeric" autocomplete="off"></div>
         <div class="form-group">
@@ -1065,6 +1066,10 @@
       </div>
 
       <div class="form-group"><label>Expiry Date *</label><input type="date" id="eExpiry" required></div>
+
+      <div class="form-group"><label>💳 Payment Date</label><input type="date" id="ePaymentDate">
+        <div style="font-size:.7rem;color:var(--muted,#8AABAB);margin-top:4px">Date of the member's latest payment. Changing it also updates the payment history and revenue reports.</div>
+      </div>
 
       <div class="form-sep">📊 Attendance Analytics</div>
       <div id="eAttStats" style="margin-bottom:1.1rem"></div>
