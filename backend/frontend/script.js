@@ -5,6 +5,7 @@ document.addEventListener('wheel', () => {
 }, { passive: true });
 
 /* ── CONFIG ── */
+const BUILD = '20260928-revfix'; console.log('GymPro build', BUILD);
 const BASE        = '/api';
 const API         = `${BASE}/members`;
 const TAPI        = `${BASE}/trainers`;
@@ -195,7 +196,7 @@ function logout() {
   localStorage.removeItem('token'); 
   localStorage.removeItem('user'); 
   // SECURITY: wipe cached API responses so the next user on this device can't see them
-  try { if ('caches' in window) caches.delete('gympro-data-v4'); navigator.serviceWorker?.controller?.postMessage('CLEAR_DATA'); } catch(e) {}
+  try { if ('caches' in window) caches.delete('gympro-data-v5'); navigator.serviceWorker?.controller?.postMessage('CLEAR_DATA'); } catch(e) {}
   location.href='/login.html'; 
 }
 
