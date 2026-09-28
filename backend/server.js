@@ -7,6 +7,7 @@ const cors     = require('cors');
 const { sequelize } = require('./models'); // loads models + associations
 
 const app = express();
+app.set('trust proxy', 1); // correct protocol/host behind Hostinger's proxy
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -26,6 +27,10 @@ app.use('/api/qr',         require('./routes/qr-attendance'));
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running', time: new Date() });
 });
+
+// Unknown /api paths must return JSON, not the SPA's index.html (that made
+// fetch().json() explode with "Unexpected token <").
+app.use('/api', (req, res) => res.status(404).json({ error: 'API route not found' }));
 
 // Serve frontend — bundled INSIDE the backend/ folder so it deploys
 // together with the code on every GitHub push (no manual file uploads
