@@ -5,8 +5,8 @@
 // anyone who had already loaded it once, exactly what was happening here.
 // Bumping the cache name forces every existing browser to treat the old
 // cache as stale and fetch fresh copies of everything on next load.
-const CACHE_NAME = 'gympro-app-v4';
-const DATA_CACHE = 'gympro-data-v4';
+const CACHE_NAME = 'gympro-app-v5';
+const DATA_CACHE = 'gympro-data-v5';
 
 const ASSETS_TO_CACHE = [
   '/',
