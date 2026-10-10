@@ -59,11 +59,67 @@ router.get('/gym-qr', authMiddleware, async (req, res) => {
   }
 });
 
+// ── Brute-force guard for the public check-in page ─────────────────────────
+// The check-in screen now shows the member's PHOTO, so guessing phone numbers
+// must be hard. Only FAILED lookups count: 10 misses in 10 minutes from one
+// IP and that IP is paused. Real members (who type their own number) are never
+// affected, even on shared gym Wi-Fi.
+const missLog = new Map();
+const MISS_LIMIT = 10, MISS_WINDOW = 10 * 60 * 1000;
+function tooManyMisses(ip) {
+  const now = Date.now();
+  const hits = (missLog.get(ip) || []).filter(t => now - t < MISS_WINDOW);
+  missLog.set(ip, hits);
+  return hits.length >= MISS_LIMIT;
+}
+function recordMiss(ip) {
+  const hits = missLog.get(ip) || [];
+  hits.push(Date.now());
+  missLog.set(ip, hits);
+  if (missLog.size > 5000) { // keep memory bounded
+    for (const [k, v] of missLog) if (!v.some(t => Date.now() - t < MISS_WINDOW)) missLog.delete(k);
+  }
+}
+
+function findMemberFromBody({ memberId, phoneNumber }, gymId) {
+  if (memberId) {
+    // only the public Member ID (memberNo) - never the internal row id
+    return Member.findOne({ where: { memberNo: parseInt(memberId, 10) || -1, userId: gymId, isDeleted: false } });
+  }
+  if (phoneNumber) {
+    const cleanPhone = String(phoneNumber).replace(/[^0-9]/g, '').slice(-10);
+    return Member.findOne({ where: { phone: cleanPhone, userId: gymId, isDeleted: false } });
+  }
+  return Promise.resolve(null);
+}
+
+// Everything the gate needs to recognise the person: photo, name, ID, expiry.
+function memberCard(member) {
+  const expStr = member.expiryDate ? new Date(member.expiryDate).toISOString().slice(0, 10) : null;
+  let daysLeft = null;
+  if (expStr) {
+    daysLeft = Math.round((new Date(expStr + 'T00:00:00Z') - new Date(todayStr() + 'T00:00:00Z')) / 86400000);
+  }
+  return {
+    memberName: member.name,
+    memberId: member.id,
+    memberNo: member.memberNo || null,
+    memberPlan: member.plan,
+    memberPhoto: (typeof member.photo === 'string' && member.photo.startsWith('data:image/')) ? member.photo : '',
+    expiryDate: expStr,
+    daysLeft
+  };
+}
+
 // Member self check-in (public)
 router.post('/member-checkin', async (req, res) => {
   try {
     const { qrData, memberId, phoneNumber } = req.body;
     if (!qrData) return res.status(400).json({ error: 'QR data required' });
+
+    if (tooManyMisses(req.ip)) {
+      return res.status(429).json({ error: 'Too many wrong attempts. Please wait 10 minutes or ask the gym staff.' });
+    }
 
     let decoded;
     try {
@@ -77,63 +133,63 @@ router.post('/member-checkin', async (req, res) => {
     }
 
     const { gymId } = decoded;
-
-    let member;
-    if (memberId) {
-      // SECURITY FIX: only match the public Member ID (memberNo). The old
-      // fallback to the internal row id let anyone type 1,2,3... and check
-      // in other people.
-      member = await Member.findOne({ where: { memberNo: parseInt(memberId, 10) || -1, userId: gymId, isDeleted: false } });
-    } else if (phoneNumber) {
-      const cleanPhone = String(phoneNumber).replace(/[^0-9]/g, '');
-      member = await Member.findOne({ where: { phone: cleanPhone, userId: gymId, isDeleted: false } });
-    }
+    const member = await findMemberFromBody({ memberId, phoneNumber }, gymId);
 
     if (!member) {
-      return res.status(404).json({ error: 'Member not found. Please check your Member ID or Phone number.' });
+      recordMiss(req.ip);
+      return res.status(404).json({ code: 'NOT_FOUND', error: 'Member not found. Please check your Member ID or Phone number.' });
     }
 
-    if (member.status !== 'Active' && member.status !== 'Trial') {
-      return res.status(403).json({ error: 'Membership is not active. Please contact gym staff.' });
-    }
-
-    if (member.expiryDate) {
-      // DATE FIX: compare calendar days in the gym's timezone (the old code
-      // compared server-local midnights, so on IST mornings an expired
-      // member could still check in).
-      const expStr = new Date(member.expiryDate).toISOString().slice(0, 10);
-      if (expStr < todayStr()) {
-        const [y, mo, d] = expStr.split('-');
-        return res.status(403).json({ error: `Membership expired on ${d}/${mo}/${y}. Please renew.` });
-      }
-    }
-
+    const card = memberCard(member);
     const today = todayStr();
 
-    const existingAttendance = await Attendance.findOne({ where: { userId: gymId, memberId: member.id, date: today } });
-
-    if (existingAttendance && existingAttendance.status === 'Present') {
-      return res.json({
-        success: true,
-        alreadyChecked: true,
-        message: `Welcome back ${member.name}! You already checked in today.`,
-        memberName: member.name,
-        memberId: member.id,
-        checkinTime: existingAttendance.markedAt
+    // 1) EXPIRED -> entry refused (shown in red with the member's photo + expiry date)
+    if (card.expiryDate && card.expiryDate < today) {
+      const [y, mo, d] = card.expiryDate.split('-');
+      return res.status(403).json({
+        success: false, code: 'EXPIRED', ...card,
+        error: `Membership expired on ${d}/${mo}/${y}. Please renew at the desk.`
       });
     }
 
-    let attendance;
-    if (existingAttendance) {
-      existingAttendance.status = 'Present';
-      existingAttendance.markedAt = new Date();
-      existingAttendance.checkinMethod = 'qr_member';
-      attendance = await existingAttendance.save();
-    } else {
-      attendance = await Attendance.create({
-        userId: gymId, memberId: member.id, date: today,
-        status: 'Present', markedAt: new Date(), checkinMethod: 'qr_member'
+    // 2) Frozen / inactive / expired status -> refused
+    if (member.status !== 'Active' && member.status !== 'Trial') {
+      return res.status(403).json({
+        success: false, code: 'INACTIVE', ...card,
+        error: 'Membership is not active. Please contact gym staff.'
       });
+    }
+
+    // 3) Already entered today -> RED "already entered" with photo + first entry time
+    const existingAttendance = await Attendance.findOne({ where: { userId: gymId, memberId: member.id, date: today } });
+    if (existingAttendance && existingAttendance.status === 'Present') {
+      return res.status(409).json({
+        success: false, code: 'ALREADY_CHECKED_IN', alreadyChecked: true, ...card,
+        checkinTime: existingAttendance.markedAt,
+        error: 'This member has already checked in today.'
+      });
+    }
+
+    // 4) First entry today -> allowed
+    try {
+      if (existingAttendance) {            // staff had marked Absent earlier
+        existingAttendance.status = 'Present';
+        existingAttendance.markedAt = new Date();
+        existingAttendance.checkinMethod = 'qr_member';
+        await existingAttendance.save();
+      } else {
+        await Attendance.create({
+          userId: gymId, memberId: member.id, date: today,
+          status: 'Present', markedAt: new Date(), checkinMethod: 'qr_member'
+        });
+      }
+    } catch (e) {
+      // two scans at the same instant: the unique (gym, member, date) index lets only one in
+      if (e.name === 'SequelizeUniqueConstraintError') {
+        return res.status(409).json({ success: false, code: 'ALREADY_CHECKED_IN', alreadyChecked: true, ...card,
+          checkinTime: new Date(), error: 'This member has already checked in today.' });
+      }
+      throw e;
     }
 
     const weekAgo = todayStr(-7);
@@ -143,18 +199,14 @@ router.post('/member-checkin', async (req, res) => {
     const weeklyCount = lastWeekAttendances.filter(a => a.status === 'Present').length;
 
     res.json({
-      success: true,
-      message: `✅ Welcome ${member.name}! Your attendance has been marked for today.`,
-      memberName: member.name,
-      memberId: member.id,
-      memberPlan: member.plan,
-      expiryDate: member.expiryDate,
+      success: true, code: 'OK', ...card,
+      message: `Welcome ${member.name}! Your attendance has been marked for today.`,
       weeklyAttendance: weeklyCount,
       checkinTime: new Date()
     });
   } catch (err) {
     console.error('Member check-in error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -163,25 +215,18 @@ router.post('/my-attendance', async (req, res) => {
   try {
     const { gymQRData, memberId, phoneNumber } = req.body;
     if (!gymQRData) return res.status(400).json({ error: 'Gym QR data required' });
+    if (tooManyMisses(req.ip)) return res.status(429).json({ error: 'Too many wrong attempts. Please wait 10 minutes.' });
 
-    const decoded = JSON.parse(Buffer.from(gymQRData, 'base64').toString());
+    let decoded;
+    try { decoded = JSON.parse(Buffer.from(gymQRData, 'base64').toString()); }
+    catch (e) { return res.status(400).json({ error: 'Invalid QR code' }); }
     if (decoded.type !== 'gym_checkin') return res.status(400).json({ error: 'Invalid gym QR code' });
 
     const { gymId } = decoded;
+    const member = await findMemberFromBody({ memberId, phoneNumber }, gymId);
+    if (!member) { recordMiss(req.ip); return res.status(404).json({ error: 'Member not found' }); }
 
-    let member;
-    if (memberId) {
-      // SECURITY FIX: only match the public Member ID (memberNo). The old
-      // fallback to the internal row id let anyone type 1,2,3... and check
-      // in other people.
-      member = await Member.findOne({ where: { memberNo: parseInt(memberId, 10) || -1, userId: gymId, isDeleted: false } });
-    } else if (phoneNumber) {
-      const cleanPhone = String(phoneNumber).replace(/[^0-9]/g, '');
-      member = await Member.findOne({ where: { phone: cleanPhone, userId: gymId, isDeleted: false } });
-    }
-    if (!member) return res.status(404).json({ error: 'Member not found' });
-
-    const startDateStr = todayStr(-30);
+const startDateStr = todayStr(-30);
 
     const attendances = await Attendance.findAll({
       where: { userId: gymId, memberId: member.id, date: { [Op.gte]: startDateStr } },
