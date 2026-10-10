@@ -15,7 +15,10 @@
       align-items: center;
       justify-content: center;
       padding: 20px;
+      transition: background .25s;
     }
+    /* whole screen turns red when entry is refused, so staff can see it from across the desk */
+    body.denied { background: linear-gradient(135deg, #D32F2F, #8E1B1B); }
     .checkin-card {
       background: #fff;
       border-radius: 32px;
@@ -25,374 +28,364 @@
       text-align: center;
       box-shadow: 0 20px 60px rgba(0,0,0,.3);
     }
-    .success-icon, .error-icon { font-size: 4rem; margin-bottom: 16px; }
-    .success-icon { color: #27AE60; }
-    .error-icon { color: #E74C3C; }
+    .error-icon { font-size: 4rem; margin-bottom: 16px; }
     .welcome { font-size: 1.5rem; font-weight: 800; color: #1A2E2E; margin-bottom: 8px; }
-    .member-details {
-      background: #F0F5F5;
-      border-radius: 20px;
-      padding: 16px;
-      margin: 20px 0;
-      text-align: left;
-    }
-    .detail-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px solid #E0ECEC;
-    }
-    .detail-row:last-child { border-bottom: none; }
-    .detail-label { font-weight: 600; color: #8AABAB; }
-    .detail-value { font-weight: 800; color: #1A2E2E; }
     .form-group { margin-bottom: 20px; text-align: left; }
     .form-group label {
-      display: block;
-      font-size: .75rem;
-      font-weight: 800;
-      color: #1A8C8C;
-      margin-bottom: 8px;
-      text-transform: uppercase;
-      letter-spacing: .5px;
+      display: block; font-size: .75rem; font-weight: 800; color: #1A8C8C;
+      margin-bottom: 8px; text-transform: uppercase; letter-spacing: .5px;
     }
     .form-group input, .form-group select {
-      width: 100%;
-      padding: 14px 16px;
-      border: 2px solid #E0ECEC;
-      border-radius: 14px;
-      font-family: inherit;
-      font-size: 1rem;
-      background: #fff;
-      transition: all .2s;
+      width: 100%; padding: 14px 16px; border: 2px solid #E0ECEC; border-radius: 14px;
+      font-family: inherit; font-size: 1rem; background: #fff; transition: all .2s;
     }
-    .form-group input:focus {
-      outline: none;
-      border-color: #1A8C8C;
-      box-shadow: 0 0 0 3px rgba(26,140,140,.1);
-    }
+    .form-group input:focus { outline: none; border-color: #1A8C8C; box-shadow: 0 0 0 3px rgba(26,140,140,.1); }
     .btn {
-      width: 100%;
-      padding: 14px;
-      border: none;
-      border-radius: 14px;
-      font-family: inherit;
-      font-weight: 800;
-      font-size: 1rem;
-      cursor: pointer;
-      margin-top: 8px;
-      transition: all .2s;
+      width: 100%; padding: 14px; border: none; border-radius: 14px; font-family: inherit;
+      font-weight: 800; font-size: 1rem; cursor: pointer; margin-top: 8px; transition: all .2s;
     }
     .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .6; }
     .btn-primary { background: #1A8C8C; color: #fff; }
     .btn-secondary { background: #F0F5F5; color: #4A6464; }
     .btn-success { background: #27AE60; color: #fff; }
-    .streak {
-      background: #E8F8EF;
-      border-radius: 16px;
-      padding: 12px;
-      text-align: center;
-      margin: 16px 0;
-    }
-    .streak-number { font-size: 1.8rem; font-weight: 800; color: #27AE60; }
+    .btn-danger { background: #C62828; color: #fff; }
     .hidden { display: none; }
-    .qr-info {
-      background: #FEF9E7;
-      border-radius: 12px;
-      padding: 10px;
-      margin-bottom: 20px;
-      font-size: .7rem;
-      color: #F39C12;
-    }
-    .history-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 10px;
-      border-bottom: 1px solid #E0ECEC;
-    }
+    .streak { background: #E8F8EF; border-radius: 16px; padding: 12px; text-align: center; margin: 16px 0; }
+    .streak-number { font-size: 1.8rem; font-weight: 800; color: #27AE60; }
+    .history-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #E0ECEC; }
     .history-date { font-size: .8rem; font-weight: 600; }
     .history-status { font-size: .75rem; font-weight: 700; }
     .status-present { color: #27AE60; }
     .status-absent { color: #E74C3C; }
+
+    /* ── result screen (allowed / refused) ── */
+    .banner {
+      border-radius: 14px; padding: 12px 10px; margin-bottom: 18px;
+      font-weight: 800; font-size: 1.05rem; letter-spacing: .4px; text-transform: uppercase;
+    }
+    .result.ok  .banner { background: #E8F8EF; color: #1E8E4E; }
+    .result.bad .banner { background: #C62828; color: #fff; }
+    .photo-wrap {
+      width: 170px; height: 170px; margin: 0 auto 14px; border-radius: 32px; overflow: hidden;
+      border: 6px solid #27AE60; background: #F0F5F5; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    }
+    .result.bad .photo-wrap { border-color: #C62828; }
+    .photo-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .photo-wrap .initial { font-size: 4rem; font-weight: 800; color: #8AABAB; }
+    .nophoto { font-size: .7rem; color: #E67E22; font-weight: 700; margin: -6px 0 10px; }
+    .idbadge {
+      display: inline-block; background: #1A8C8C; color: #fff; font-weight: 800; font-size: .8rem;
+      padding: 3px 12px; border-radius: 20px; margin-bottom: 6px;
+    }
+    .reason { font-weight: 700; margin: 8px 0 4px; font-size: .95rem; }
+    .result.ok  .reason { color: #1E8E4E; }
+    .result.bad .reason { color: #C62828; }
+    .member-details { background: #F0F5F5; border-radius: 20px; padding: 6px 16px; margin: 16px 0; text-align: left; }
+    .detail-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #E0ECEC; }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { font-weight: 600; color: #8AABAB; }
+    .detail-value { font-weight: 800; color: #1A2E2E; text-align: right; }
+    .detail-value small { display: block; font-size: .7rem; font-weight: 700; }
+    .exp-bad { color: #C62828 !important; }
+    .exp-warn { color: #E67E22 !important; }
+    .exp-good { color: #1E8E4E !important; }
   </style>
 </head>
 <body>
   <div class="checkin-card" id="checkinCard">
-    <div id="qrDataDisplay" class="hidden"></div>
-    
+
     <!-- Check-in Form -->
     <div id="checkinForm">
       <div style="font-size:3rem;margin-bottom:10px">📱</div>
       <h2 style="margin-bottom:8px">Gym Check-in</h2>
-      <p style="color:#8AABAB;margin-bottom:24px">Enter your details to mark attendance</p>
-      
+      <p style="color:#8AABAB;margin-bottom:24px">Enter <b>your own</b> details to mark attendance</p>
+
       <div class="form-group">
         <label>Enter using</label>
-        <select id="searchType" onchange="toggleSearchField()" style="width:100%;padding:12px;border:2px solid #E0ECEC;border-radius:14px">
+        <select id="searchType" onchange="toggleSearchField()">
           <option value="memberId">Member ID</option>
           <option value="phone">Phone Number</option>
         </select>
       </div>
-      
+
       <div class="form-group" id="memberIdField">
         <label>Member ID</label>
-        <input type="text" id="memberId" placeholder="Enter your Member ID" autocomplete="off">
+        <input type="text" id="memberId" placeholder="Enter your Member ID" autocomplete="off" inputmode="numeric">
       </div>
-      
+
       <div class="form-group hidden" id="phoneField">
         <label>Phone Number</label>
-        <input type="tel" id="phoneNumber" placeholder="Enter 10-digit mobile number" maxlength="10" autocomplete="off">
+        <input type="tel" id="phoneNumber" placeholder="Enter 10-digit mobile number" maxlength="10" autocomplete="off" inputmode="numeric">
       </div>
-      
-      <button class="btn btn-primary" onclick="submitCheckin()">✅ Check-in Now</button>
-      
+
+      <button class="btn btn-primary" onclick="submitCheckin(this)">✅ Check-in Now</button>
+
       <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #E0ECEC">
         <p style="font-size:.7rem;color:#8AABAB">
           💡 Don't have Member ID? Ask the gym staff for your ID.<br>
-          Your attendance will be recorded instantly.
+          Your photo is shown to the gym staff at the entrance.
         </p>
       </div>
     </div>
-    
-    <!-- Success View -->
-    <div id="successView" class="hidden">
-      <div class="success-icon">✅</div>
-      <div class="welcome" id="welcomeName"></div>
-      <p id="checkinMessage" style="color:#27AE60;font-weight:600;margin-bottom:16px"></p>
-      
+
+    <!-- Result: entry allowed (green) or refused (red) -->
+    <div id="resultView" class="result hidden">
+      <div class="banner" id="rBanner"></div>
+
+      <div class="photo-wrap" id="rPhotoWrap"></div>
+      <div class="nophoto hidden" id="rNoPhoto">No photo on file — please verify ID with staff</div>
+
+      <div class="welcome" id="rName"></div>
+      <div class="idbadge" id="rId"></div>
+      <p class="reason" id="rReason"></p>
+
       <div class="member-details">
         <div class="detail-row">
           <span class="detail-label">Plan</span>
-          <span class="detail-value" id="memberPlan"></span>
+          <span class="detail-value" id="rPlan"></span>
         </div>
         <div class="detail-row">
           <span class="detail-label">Valid Till</span>
-          <span class="detail-value" id="expiryDate"></span>
+          <span class="detail-value" id="rExpiry"></span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">Check-in Time</span>
-          <span class="detail-value" id="checkinTime"></span>
+          <span class="detail-label" id="rTimeLabel">Check-in Time</span>
+          <span class="detail-value" id="rTime"></span>
         </div>
       </div>
-      
+
       <div id="streakDiv" class="streak hidden">
         <div class="streak-number" id="streakCount"></div>
         <div style="font-size:.75rem">days checked in this week</div>
       </div>
-      
-      <button class="btn btn-success" onclick="resetForm()">✓ Check-in Another Member</button>
-      <button class="btn btn-secondary" onclick="viewMyAttendance()">📊 View My Attendance</button>
+
+      <button class="btn btn-success" id="rDoneBtn" onclick="resetForm()">✓ Done</button>
+      <button class="btn btn-secondary" id="rHistBtn" onclick="viewMyAttendance()">📊 View My Attendance</button>
     </div>
-    
-    <!-- Error View -->
+
+    <!-- Plain error (member not found, network, too many attempts) -->
     <div id="errorView" class="hidden">
       <div class="error-icon">❌</div>
       <div class="welcome" style="color:#E74C3C">Check-in Failed</div>
       <p id="errorMessage" style="color:#E74C3C;margin:16px 0"></p>
       <button class="btn btn-primary" onclick="resetForm()">Try Again</button>
     </div>
-    
+
     <!-- History View -->
     <div id="historyView" class="hidden">
       <div style="font-size:2rem;margin-bottom:10px">📊</div>
       <div class="welcome" id="historyName"></div>
       <p style="color:#8AABAB;margin-bottom:16px">Last 30 Days Attendance</p>
-      
+
       <div class="streak" style="background:#1A8C8C;color:#fff">
         <div class="streak-number" style="color:#fff" id="totalPresent"></div>
         <div style="font-size:.75rem">days present (last 30 days)</div>
       </div>
-      
+
       <div id="historyList" style="max-height:350px;overflow-y:auto;margin:16px 0"></div>
-      
+
       <button class="btn btn-secondary" onclick="resetForm()">← Back to Check-in</button>
     </div>
   </div>
 
   <script>
     const BASE = '/api';
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    const qrData = urlParams.get('qr');
-    
-    let currentGymQR = null;
-    let currentMemberId = null;
-    
-    function toggleSearchField() {
-      const searchType = document.getElementById('searchType').value;
-      const memberIdField = document.getElementById('memberIdField');
-      const phoneField = document.getElementById('phoneField');
-      
-      if (searchType === 'memberId') {
-        memberIdField.classList.remove('hidden');
-        phoneField.classList.add('hidden');
-      } else {
-        memberIdField.classList.add('hidden');
-        phoneField.classList.remove('hidden');
-      }
+    const qrData = new URLSearchParams(window.location.search).get('qr');
+    const VIEWS = ['checkinForm', 'resultView', 'errorView', 'historyView'];
+
+    function show(id) {
+      VIEWS.forEach(v => document.getElementById(v).classList.toggle('hidden', v !== id));
+      document.body.classList.remove('denied');
     }
-    
-    async function submitCheckin() {
-      const searchType = document.getElementById('searchType').value;
-      let memberId = null;
-      let phoneNumber = null;
-      
-      if (searchType === 'memberId') {
+
+    function toggleSearchField() {
+      const byId = document.getElementById('searchType').value === 'memberId';
+      document.getElementById('memberIdField').classList.toggle('hidden', !byId);
+      document.getElementById('phoneField').classList.toggle('hidden', byId);
+    }
+
+    // 'YYYY-MM-DD' -> '21 Oct 2026' (parsed by hand, so no timezone can shift the day)
+    function fmtDay(str) {
+      if (!str) return '—';
+      const [y, m, d] = String(str).slice(0, 10).split('-').map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+    function fmtTime(v) {
+      const d = v ? new Date(v) : new Date();
+      return isNaN(d) ? '—' : d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    async function submitCheckin(btn) {
+      const byId = document.getElementById('searchType').value === 'memberId';
+      let memberId = null, phoneNumber = null;
+
+      if (byId) {
         memberId = document.getElementById('memberId').value.trim();
-        if (!memberId) {
-          alert('Please enter your Member ID');
-          return;
-        }
+        if (!memberId) { alert('Please enter your Member ID'); return; }
       } else {
-        phoneNumber = document.getElementById('phoneNumber').value.trim();
-        if (!phoneNumber || phoneNumber.length !== 10) {
-          alert('Please enter a valid 10-digit phone number');
-          return;
-        }
+        phoneNumber = document.getElementById('phoneNumber').value.replace(/\D/g, '');
+        if (phoneNumber.length !== 10) { alert('Please enter a valid 10-digit phone number'); return; }
       }
-      
-      let gymQR = currentGymQR;
-      if (!gymQR && qrData) {
-        gymQR = qrData;
-      }
-      
-      if (!gymQR) {
-        alert('Invalid QR code. Please scan the gym QR code again.');
-        return;
-      }
-      
-      const btn = event.target;
+      if (!qrData) { alert('Invalid QR code. Please scan the gym QR code again.'); return; }
+
       const originalText = btn.textContent;
-      btn.textContent = 'Processing...';
+      btn.textContent = 'Checking…';
       btn.disabled = true;
-      
+
       try {
         const response = await fetch(`${BASE}/qr/member-checkin`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ qrData: gymQR, memberId, phoneNumber })
+          body: JSON.stringify({ qrData, memberId, phoneNumber })
         });
-        
-        const data = await response.json();
-        
-        if (response.ok && data.success) {
-          currentMemberId = data.memberId;
-          showSuccess(data);
-        } else {
-          showError(data.error || 'Check-in failed');
-        }
+        const data = await response.json().catch(() => ({}));
+
+        if (response.ok && data.success) showResult(data, 'OK');
+        else if (data.code === 'ALREADY_CHECKED_IN' || data.code === 'EXPIRED' || data.code === 'INACTIVE') showResult(data, data.code);
+        else showError(data.error || 'Check-in failed');
       } catch (err) {
         showError('Network error. Please try again.');
       }
-      
+
       btn.textContent = originalText;
       btn.disabled = false;
     }
-    
-    function showSuccess(data) {
-      document.getElementById('checkinForm').classList.add('hidden');
-      document.getElementById('errorView').classList.add('hidden');
-      document.getElementById('historyView').classList.add('hidden');
-      document.getElementById('successView').classList.remove('hidden');
-      
-      document.getElementById('welcomeName').textContent = data.memberName;
-      document.getElementById('checkinMessage').textContent = data.message;
-      document.getElementById('memberPlan').textContent = data.memberPlan || 'Standard';
-      document.getElementById('expiryDate').textContent = data.expiryDate ? new Date(data.expiryDate).toLocaleDateString('en-IN') : 'Active';
-      document.getElementById('checkinTime').textContent = new Date().toLocaleTimeString();
-      
-      if (data.weeklyAttendance) {
-        document.getElementById('streakDiv').classList.remove('hidden');
-        document.getElementById('streakCount').textContent = data.weeklyAttendance;
+
+    function showResult(data, code) {
+      const ok = code === 'OK';
+      show('resultView');
+      document.body.classList.toggle('denied', !ok);
+      const view = document.getElementById('resultView');
+      view.classList.toggle('ok', ok);
+      view.classList.toggle('bad', !ok);
+
+      const banners = {
+        OK: '✅ Entry allowed',
+        ALREADY_CHECKED_IN: '⛔ Already entered today',
+        EXPIRED: '⛔ Membership expired',
+        INACTIVE: '⛔ Membership not active'
+      };
+      document.getElementById('rBanner').textContent = banners[code];
+
+      // photo (only real image data URLs are used) or an initial-letter fallback
+      const wrap = document.getElementById('rPhotoWrap');
+      wrap.textContent = '';
+      const hasPhoto = typeof data.memberPhoto === 'string' && data.memberPhoto.startsWith('data:image/');
+      if (hasPhoto) {
+        const img = document.createElement('img');
+        img.alt = 'Member photo';
+        img.src = data.memberPhoto;
+        wrap.appendChild(img);
+      } else {
+        const s = document.createElement('span');
+        s.className = 'initial';
+        s.textContent = (data.memberName || '?').trim().charAt(0).toUpperCase();
+        wrap.appendChild(s);
       }
+      document.getElementById('rNoPhoto').classList.toggle('hidden', hasPhoto);
+
+      document.getElementById('rName').textContent = data.memberName || '';
+      document.getElementById('rId').textContent = data.memberNo ? `ID #${data.memberNo}` : '';
+      document.getElementById('rId').classList.toggle('hidden', !data.memberNo);
+
+      const reason = document.getElementById('rReason');
+      if (ok) reason.textContent = data.message || 'Attendance marked.';
+      else if (code === 'ALREADY_CHECKED_IN') reason.textContent = 'This member already entered today. Check ID before allowing again.';
+      else reason.textContent = data.error || '';
+
+      document.getElementById('rPlan').textContent = data.memberPlan || '—';
+
+      // expiry date + how many days are left / how long ago it ended
+      const exp = document.getElementById('rExpiry');
+      const dl = data.daysLeft;
+      let sub = '', cls = 'exp-good';
+      if (dl === null || dl === undefined) { sub = ''; cls = ''; }
+      else if (dl < 0) { sub = `Expired ${-dl} day${dl === -1 ? '' : 's'} ago`; cls = 'exp-bad'; }
+      else if (dl === 0) { sub = 'Expires today'; cls = 'exp-warn'; }
+      else if (dl <= 3) { sub = `${dl} day${dl === 1 ? '' : 's'} left — renew soon`; cls = 'exp-warn'; }
+      else { sub = `${dl} days left`; }
+      exp.className = 'detail-value ' + cls;
+      exp.textContent = '';
+      exp.appendChild(document.createTextNode(data.expiryDate ? fmtDay(data.expiryDate) : 'No expiry set'));
+      if (sub) { const sm = document.createElement('small'); sm.textContent = sub; exp.appendChild(sm); }
+
+      // first-entry time for "already entered", the current time for a fresh entry
+      const timeRow = document.getElementById('rTime').parentElement;
+      if (code === 'EXPIRED' || code === 'INACTIVE') {
+        timeRow.classList.add('hidden');
+      } else {
+        timeRow.classList.remove('hidden');
+        document.getElementById('rTimeLabel').textContent = code === 'ALREADY_CHECKED_IN' ? 'First entry today' : 'Check-in Time';
+        document.getElementById('rTime').textContent = fmtTime(data.checkinTime);
+      }
+
+      const showStreak = ok && data.weeklyAttendance;
+      document.getElementById('streakDiv').classList.toggle('hidden', !showStreak);
+      if (showStreak) document.getElementById('streakCount').textContent = data.weeklyAttendance;
+
+      document.getElementById('rHistBtn').classList.toggle('hidden', !ok);
+      const done = document.getElementById('rDoneBtn');
+      done.className = 'btn ' + (ok ? 'btn-success' : 'btn-danger');
+      done.textContent = ok ? '✓ Done' : '← Back';
     }
-    
+
     function showError(message) {
-      document.getElementById('checkinForm').classList.add('hidden');
-      document.getElementById('successView').classList.add('hidden');
-      document.getElementById('historyView').classList.add('hidden');
-      document.getElementById('errorView').classList.remove('hidden');
+      show('errorView');
       document.getElementById('errorMessage').textContent = message;
     }
-    
+
     async function viewMyAttendance() {
-      const searchType = document.getElementById('searchType').value;
-      let memberId = null;
-      let phoneNumber = null;
-      
-      if (searchType === 'memberId') {
-        memberId = document.getElementById('memberId').value.trim();
-      } else {
-        phoneNumber = document.getElementById('phoneNumber').value.trim();
-      }
-      
-      let gymQR = currentGymQR || qrData;
-      
-      if (!gymQR) {
-        alert('QR data missing');
-        return;
-      }
-      
+      const byId = document.getElementById('searchType').value === 'memberId';
+      const memberId = byId ? document.getElementById('memberId').value.trim() : null;
+      const phoneNumber = byId ? null : document.getElementById('phoneNumber').value.replace(/\D/g, '');
+      if (!qrData) { alert('QR data missing'); return; }
+
       try {
         const response = await fetch(`${BASE}/qr/my-attendance`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ gymQRData: gymQR, memberId, phoneNumber })
+          body: JSON.stringify({ gymQRData: qrData, memberId, phoneNumber })
         });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-          displayHistory(data);
-        } else {
-          alert(data.error || 'Failed to load history');
-        }
-      } catch (err) {
-        alert('Network error');
-      }
+        const data = await response.json().catch(() => ({}));
+        if (response.ok) displayHistory(data);
+        else alert(data.error || 'Failed to load history');
+      } catch (err) { alert('Network error'); }
     }
-    
+
     function displayHistory(data) {
-      document.getElementById('checkinForm').classList.add('hidden');
-      document.getElementById('successView').classList.add('hidden');
-      document.getElementById('errorView').classList.add('hidden');
-      document.getElementById('historyView').classList.remove('hidden');
-      
+      show('historyView');
       document.getElementById('historyName').textContent = data.memberName;
       document.getElementById('totalPresent').textContent = data.totalPresent;
-      
-      const historyList = document.getElementById('historyList');
-      
-      if (data.history.length === 0) {
-        historyList.innerHTML = '<p style="text-align:center;color:#8AABAB;padding:20px">No attendance records yet</p>';
-      } else {
-        historyList.innerHTML = data.history.map(h => `
-          <div class="history-item">
-            <span class="history-date">📅 ${h.date}</span>
-            <span class="history-status ${h.status === 'Present' ? 'status-present' : 'status-absent'}">
-              ${h.status === 'Present' ? '✓ Present' : '✗ Absent'}
-            </span>
-            <span style="font-size:.65rem;color:#8AABAB">${h.checkinMethod === 'qr_member' ? 'QR' : 'Manual'}</span>
-          </div>
-        `).join('');
+
+      const list = document.getElementById('historyList');
+      list.textContent = '';
+      if (!data.history.length) {
+        const p = document.createElement('p');
+        p.style.cssText = 'text-align:center;color:#8AABAB;padding:20px';
+        p.textContent = 'No attendance records yet';
+        list.appendChild(p);
+        return;
       }
+      data.history.forEach(h => {
+        const row = document.createElement('div'); row.className = 'history-item';
+        const d = document.createElement('span'); d.className = 'history-date'; d.textContent = '📅 ' + fmtDay(h.date);
+        const s = document.createElement('span');
+        s.className = 'history-status ' + (h.status === 'Present' ? 'status-present' : 'status-absent');
+        s.textContent = h.status === 'Present' ? '✓ Present' : '✗ Absent';
+        const m = document.createElement('span'); m.style.cssText = 'font-size:.65rem;color:#8AABAB';
+        m.textContent = h.checkinMethod === 'qr_member' ? 'QR' : 'Manual';
+        row.append(d, s, m); list.appendChild(row);
+      });
     }
-    
+
     function resetForm() {
-      document.getElementById('checkinForm').classList.remove('hidden');
-      document.getElementById('successView').classList.add('hidden');
-      document.getElementById('errorView').classList.add('hidden');
-      document.getElementById('historyView').classList.add('hidden');
+      show('checkinForm');
       document.getElementById('memberId').value = '';
       document.getElementById('phoneNumber').value = '';
-      currentMemberId = null;
     }
-    
-    // Initialize
-    if (qrData) {
-      currentGymQR = qrData;
-      console.log('QR Data loaded from scan');
-    }
-    
+
     toggleSearchField();
   </script>
 </body>
