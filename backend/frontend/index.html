@@ -10,7 +10,7 @@
   <meta name="theme-color" content="#1A8C8C">
   <title>GymPro</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260928-revfix">
+  <link rel="stylesheet" href="style.css?v=20261009-export">
   <style>
     /* Additional styles for revenue dashboard */
     .rev-month-grid {
@@ -314,6 +314,14 @@
 
   <!-- ──────────────── MEMBERS ──────────────── -->
   <div id="page-members" class="page">
+    <div id="memberExportBar" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+      <span style="font-size:.76rem;color:#8AABAB;font-weight:600">Backup all member details (Excel)</span>
+      <button id="exportMembersBtn" onclick="exportMembersExcel(this)"
+        style="display:inline-flex;align-items:center;gap:6px;background:#fff;color:#1A8C8C;border:1.5px solid #1A8C8C;border-radius:20px;padding:7px 14px;font-family:inherit;font-size:.78rem;font-weight:800;cursor:pointer;white-space:nowrap">
+        📥 Download Excel
+      </button>
+    </div>
+
     <div style="position:relative;margin-bottom:10px">
       <input type="search" id="memberSearch"
         placeholder='Search Name, Phone or ID #'
@@ -1397,6 +1405,6 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="script.js?v=20260928-revfix"></script>
+<script src="script.js?v=20261009-export"></script>
 </body>
 </html>
