@@ -15,6 +15,15 @@ function normDate(v) {
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: GYM_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
   return new Date(day + 'T00:00:00.000Z');
 }
+// Phone numbers are compared as plain 10 digits ("+91 98765-43210" == "9876543210")
+// so the same person can't slip in twice with different formatting.
+function normalizePhone(v) {
+  if (v === null || v === undefined) return v;
+  const s = String(v).trim();
+  if (s.includes('_del_')) return s;          // soft-deleted marker, leave untouched
+  const digits = s.replace(/\D/g, '');
+  return digits.length > 10 ? digits.slice(-10) : digits;
+}
 const dateCol = (name, extra = {}) => ({
   type: DataTypes.DATE,
   ...extra,
@@ -29,6 +38,7 @@ const Member = sequelize.define('Member', {
 phone: {
     type: DataTypes.STRING,
     allowNull: false,
+    set(value) { this.setDataValue('phone', normalizePhone(value)); },
     validate: { is: { args: /^(\d{10}(_del_\d+)?)$/, msg: 'Please enter a valid 10-digit phone number' } }
   },
   email: { type: DataTypes.STRING, defaultValue: '' },
@@ -110,4 +120,5 @@ Member.prototype.toJSON = function () {
 };
 
 Member.normDate = normDate;
+Member.normalizePhone = normalizePhone;
 module.exports = Member;
