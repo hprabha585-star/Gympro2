@@ -5,7 +5,7 @@ document.addEventListener('wheel', () => {
 }, { passive: true });
 
 /* ── CONFIG ── */
-const BUILD = '20260928-revfix'; console.log('GymPro build', BUILD);
+const BUILD = '20261009-export'; console.log('GymPro build', BUILD);
 const BASE        = '/api';
 const API         = `${BASE}/members`;
 const TAPI        = `${BASE}/trainers`;
@@ -1096,35 +1096,26 @@ async function openEditMember(id) {
     document.getElementById('edReason').value = member.discountReason || '';
     recalcEditPrice();
 
-    const expiryEl = document.getElementById('eExpiry');
-    if (expiryEl) expiryEl.value = member.expiryDate ? member.expiryDate.split('T')[0] : '';
-    
-    // Safety Check: Only set the Payment Date if the HTML field exists
-    const pd = document.getElementById('ePaymentDate');
-    if (pd) {
-      const cur = member.lastPaymentDate ? member.lastPaymentDate.split('T')[0] : '';
+    document.getElementById('eExpiry').value = member.expiryDate ? member.expiryDate.split('T')[0] : '';
+    {
+      const pd = document.getElementById('ePaymentDate');
+      const cur = member.lastPaymentDate ? payDay(member.lastPaymentDate) : '';
       pd.value = cur; pd.dataset.orig = cur; pd.max = getLocalTodayStr();
     }
-    
-    const w = document.getElementById('ePhoneWarn'); if (w) w.style.display = 'none';
+    { const w = document.getElementById('ePhoneWarn'); if (w) w.style.display = 'none'; }
     document.getElementById('eAdmFee').value  = member.admissionFee || '';
     document.getElementById('eWaive').value   = member.admissionWaived ? 'no' : 'yes';
 
     const ptEn = !!member.ptEnabled;
     document.getElementById('ePtEnabled').checked = ptEn;
-    
-    const ptDetails = document.getElementById('ePtDetails');
-    if (ptDetails) ptDetails.style.display = ptEn ? 'block' : 'none';
-    
+    document.getElementById('ePtDetails').style.display = ptEn ? 'block' : 'none';
     document.getElementById('ePtFee').value  = member.ptFee   || '';
     document.getElementById('ePtNotes').value= member.ptNotes || '';
 
     const ePtSel = document.getElementById('ePtTrainer');
-    if (ePtSel) {
-      ePtSel.innerHTML = '<option value="">Select Trainer</option>' +
-        Object.entries(trainerMap).map(([tid,tname]) => `<option value="${esc(tid)}">${esc(tname)}</option>`).join('');
-      ePtSel.value = member.ptTrainer || '';
-    }
+    ePtSel.innerHTML = '<option value="">Select Trainer</option>' +
+      Object.entries(trainerMap).map(([tid,tname]) => `<option value="${esc(tid)}">${esc(tname)}</option>`).join('');
+    ePtSel.value = member.ptTrainer || '';
 
     document.getElementById('eEcName').value = member.emergencyContact?.name || '';
     document.getElementById('eEcPhone').value = member.emergencyContact?.phone || '';
@@ -1135,13 +1126,13 @@ async function openEditMember(id) {
     const ePD = document.getElementById('ePhotoData');
     const eClr = document.getElementById('eClearPhotoBtn');
     if (member.photo && member.photo.startsWith('data:image')) {
-      if (ePrev) ePrev.src = member.photo;
-      if (ePD) ePD.value = member.photo;
-      if (eClr) eClr.style.display = 'inline-flex';
+      ePrev.src = member.photo;
+      ePD.value = member.photo;
+      eClr.style.display = 'inline-flex';
     } else {
-      if (ePrev) ePrev.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231A8C8C22'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
-      if (ePD) ePD.value = '';
-      if (eClr) eClr.style.display = 'none';
+      ePrev.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231A8C8C22'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
+      ePD.value = '';
+      eClr.style.display = 'none';
     }
 
     renderMemberAttendanceStats(id);
@@ -1220,6 +1211,255 @@ document.getElementById('editMemberForm')?.addEventListener('submit', async e =>
   } catch(err) { toast('Network error','error'); }
   if (btn) { btn.disabled=false; btn.textContent='Save Changes'; }
 });
+
+/* ══════════════════════════════════════════════════════════════════════
+   MEMBERS → EXCEL BACKUP  (Members page → "Download Excel")
+   Builds a real .xlsx file entirely in the browser — no library, no CDN,
+   works offline. Sheets: Members, Payment History, Backup Info.
+   Attendance and photos are intentionally NOT included.
+   ══════════════════════════════════════════════════════════════════════ */
+const _XL_UTF8 = new TextEncoder();
+const _XL_CRC = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; }
+  return t;
+})();
+function _xlCrc32(buf) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = _XL_CRC[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function _xlConcat(parts) {
+  const out = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
+  let o = 0; parts.forEach(p => { out.set(p, o); o += p.length; });
+  return out;
+}
+// minimal ZIP writer ("stored", no compression) — an .xlsx is just a zip of XML files
+function _xlZip(files) {
+  const dt = new Date();
+  const dosTime = (dt.getHours() << 11) | (dt.getMinutes() << 5) | (dt.getSeconds() >> 1);
+  const dosDate = ((dt.getFullYear() - 1980) << 9) | ((dt.getMonth() + 1) << 5) | dt.getDate();
+  const body = [], central = []; let offset = 0;
+  files.forEach(f => {
+    const name = _XL_UTF8.encode(f.name), data = _XL_UTF8.encode(f.text), crc = _xlCrc32(data), size = data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, size, true); lh.setUint32(22, size, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    body.push(new Uint8Array(lh.buffer), name, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(10, 0, true); ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true);
+    ch.setUint32(20, size, true); ch.setUint32(24, size, true); ch.setUint16(28, name.length, true);
+    ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + size;
+  });
+  const cd = _xlConcat(central);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cd.length, true); end.setUint32(16, offset, true);
+  return _xlConcat([...body, cd, new Uint8Array(end.buffer)]);
+}
+function _xlEsc(s) {
+  return String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function _xlCol(i) { let s = ''; i++; while (i > 0) { const r = (i - 1) % 26; s = String.fromCharCode(65 + r) + s; i = Math.floor((i - 1) / 26); } return s; }
+function _xlDateSerial(ymd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || '');
+  return m ? Math.round((Date.UTC(+m[1], +m[2] - 1, +m[3]) - Date.UTC(1899, 11, 30)) / 86400000) : null;
+}
+// cell styles (see styles.xml below): 0 text, 1 header, 2 date, 3 money, 4 wrapped text
+const _XL_STYLE = { text: 0, head: 1, date: 2, money: 3, wrap: 4 };
+function _xlSheet(cols, rows, opts = {}) {
+  const lastCol = _xlCol(cols.length - 1);
+  let x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+  x += `<dimension ref="A1:${lastCol}${rows.length + 1}"/>`;
+  if (!opts.noFreeze) {
+    x += '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1"' + (opts.freezeCols ? ` xSplit="${opts.freezeCols}" topLeftCell="${_xlCol(opts.freezeCols)}2" activePane="bottomRight"` : ' topLeftCell="A2" activePane="bottomLeft"') + ' state="frozen"/></sheetView></sheetViews>';
+  }
+  x += '<sheetFormatPr defaultRowHeight="15"/><cols>';
+  cols.forEach((c, i) => { x += `<col min="${i + 1}" max="${i + 1}" width="${c.w || 14}" customWidth="1"/>`; });
+  x += '</cols><sheetData>';
+  x += '<row r="1" ht="30" customHeight="1">';
+  cols.forEach((c, i) => { x += `<c r="${_xlCol(i)}1" s="1" t="inlineStr"><is><t>${_xlEsc(c.h)}</t></is></c>`; });
+  x += '</row>';
+  rows.forEach((row, ri) => {
+    const r = ri + 2;
+    x += `<row r="${r}">`;
+    cols.forEach((c, ci) => {
+      const v = row[ci]; const ref = _xlCol(ci) + r;
+      if (v === null || v === undefined || v === '') return;
+      if (c.t === 'n' || c.t === 'm') {
+        const n = Number(v); if (!isFinite(n)) return;
+        x += `<c r="${ref}" s="${c.t === 'm' ? _XL_STYLE.money : 0}"><v>${n}</v></c>`;
+      } else if (c.t === 'd') {
+        const n = _xlDateSerial(v); if (n === null) return;
+        x += `<c r="${ref}" s="${_XL_STYLE.date}"><v>${n}</v></c>`;
+      } else {
+        x += `<c r="${ref}" s="${c.t === 'w' ? _XL_STYLE.wrap : 0}" t="inlineStr"><is><t xml:space="preserve">${_xlEsc(v)}</t></is></c>`;
+      }
+    });
+    x += '</row>';
+  });
+  x += '</sheetData>';
+  if (!opts.noFilter) x += `<autoFilter ref="A1:${lastCol}${rows.length + 1}"/>`;
+  x += '</worksheet>';
+  return x;
+}
+
+const _XL_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+  '<numFmts count="2"><numFmt numFmtId="164" formatCode="dd-mmm-yyyy"/><numFmt numFmtId="165" formatCode="#,##0.00"/></numFmts>' +
+  '<fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font></fonts>' +
+  '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
+  '<fill><patternFill patternType="solid"><fgColor rgb="FF1A8C8C"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+  '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+  '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+  '<cellXfs count="5">' +
+  '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+  '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+  '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="center"/></xf>' +
+  '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
+  '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>' +
+  '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+
+function _xlHealth(m) {
+  const hc = Array.isArray(m.healthConditions) ? m.healthConditions : [];
+  return hc.map(h => {
+    if (typeof h === 'string') return h;
+    return [h.condition, h.severity ? `(${h.severity})` : '', h.notes ? `- ${h.notes}` : ''].filter(Boolean).join(' ');
+  }).join('; ');
+}
+function _xlDay(v) { return v ? payDay(v) : ''; }
+
+const _XL_MEMBER_COLS = [
+  { h: 'Member ID',          w: 10, t: 'n', get: m => m.memberNo },
+  { h: 'Name',               w: 24, t: 's', get: m => m.name },
+  { h: 'Phone',              w: 15, t: 's', get: m => m.phone },
+  { h: 'Email',              w: 26, t: 's', get: m => m.email },
+  { h: 'Age',                w: 7,  t: 'n', get: m => m.age },
+  { h: 'Gender',             w: 10, t: 's', get: m => m.gender },
+  { h: 'Status',             w: 11, t: 's', get: m => m.status },
+  { h: 'Plan',               w: 28, t: 's', get: m => m.plan },
+  { h: 'Plan Start Date',    w: 14, t: 'd', get: m => _xlDay(m.joinDate) },
+  { h: 'Expiry Date',        w: 14, t: 'd', get: m => _xlDay(m.expiryDate) },
+  { h: 'Last Payment Date',  w: 14, t: 'd', get: m => _xlDay(m.lastPaymentDate) },
+  { h: 'Last Payment Method',w: 12, t: 's', get: m => m.lastPaymentMethod ? String(m.lastPaymentMethod).toUpperCase() : '' },
+  { h: 'Last Payment Amount',w: 14, t: 'm', get: m => m.lastPaymentAmount },
+  { h: 'Total Paid (all payments)', w: 15, t: 'm', get: m => (Array.isArray(m.paymentHistory) ? m.paymentHistory : []).reduce((a, p) => a + (Number(p.amount) || 0), 0) },
+  { h: 'Pending Balance',    w: 13, t: 'm', get: m => m.pendingAmount },
+  { h: 'Next Payment Due',   w: 14, t: 'd', get: m => _xlDay(m.nextPaymentDue) },
+  { h: 'Plan Price',         w: 12, t: 'm', get: m => m.planPrice },
+  { h: 'Discount Type',      w: 12, t: 's', get: m => m.discountType && m.discountType !== 'none' ? m.discountType : '' },
+  { h: 'Discount Value',     w: 12, t: 'm', get: m => m.discountValue },
+  { h: 'Discount Reason',    w: 20, t: 's', get: m => m.discountReason },
+  { h: 'Admission Fee',      w: 12, t: 'm', get: m => m.admissionFee },
+  { h: 'Admission Waived',   w: 11, t: 's', get: m => m.admissionWaived ? 'Yes' : 'No' },
+  { h: 'PT Enabled',         w: 10, t: 's', get: m => m.ptEnabled ? 'Yes' : 'No' },
+  { h: 'PT Fee',             w: 11, t: 'm', get: m => m.ptFee },
+  { h: 'PT Trainer',         w: 18, t: 's', get: m => m.ptTrainer },
+  { h: 'PT Notes',           w: 24, t: 'w', get: m => m.ptNotes },
+  { h: 'Emergency Contact Name',  w: 20, t: 's', get: m => (m.emergencyContact || {}).name },
+  { h: 'Emergency Contact Phone', w: 16, t: 's', get: m => (m.emergencyContact || {}).phone },
+  { h: 'Relationship',       w: 14, t: 's', get: m => (m.emergencyContact || {}).relationship },
+  { h: 'Health Conditions',  w: 30, t: 'w', get: _xlHealth },
+  { h: 'Medical Notes',      w: 32, t: 'w', get: m => m.medicalNotes },
+  { h: 'Added On',           w: 14, t: 'd', get: m => m.createdAt ? toLocalDateStr(new Date(m.createdAt)) : '' },
+];
+const _XL_PAY_COLS = [
+  { h: 'Member ID',    w: 10, t: 'n' }, { h: 'Member Name', w: 24, t: 's' }, { h: 'Phone', w: 15, t: 's' },
+  { h: 'Payment Date', w: 14, t: 'd' }, { h: 'Category',    w: 18, t: 's' }, { h: 'Amount', w: 12, t: 'm' },
+  { h: 'Method',       w: 10, t: 's' }, { h: 'Plan',        w: 26, t: 's' }, { h: 'Receipt No', w: 34, t: 's' },
+];
+const _XL_PAY_TYPE = { plan: 'Plan', admission: 'Admission', pt: 'Personal Training', partial: 'Partial (balance pending)' };
+
+// members: array of member objects from the API (already without deleted ones)
+function buildMembersWorkbook(members, gymName) {
+  const sorted = [...members].sort((a, b) => (a.memberNo || 0) - (b.memberNo || 0) || String(a.name).localeCompare(String(b.name)));
+  const memberRows = sorted.map(m => _XL_MEMBER_COLS.map(c => c.get(m)));
+
+  const payRows = [];
+  sorted.forEach(m => {
+    const hist = (Array.isArray(m.paymentHistory) ? m.paymentHistory : [])
+      .map(p => ({ p, d: payDay(p.date) })).sort((a, b) => a.d.localeCompare(b.d));
+    hist.forEach(({ p, d }) => payRows.push([
+      m.memberNo, m.name, m.phone, d, _XL_PAY_TYPE[p.type] || '', p.amount,
+      p.method ? String(p.method).toUpperCase() : '', p.plan || '', p.receiptNo || ''
+    ]));
+  });
+
+  const totalPaid = payRows.reduce((a, r) => a + (Number(r[5]) || 0), 0);
+  const infoCols = [{ h: 'Item', w: 26, t: 's' }, { h: 'Value', w: 70, t: 's' }];
+  const infoRows = [
+    ['Gym', gymName],
+    ['Exported on', new Date().toLocaleString('en-IN')],
+    ['Members in this file', String(sorted.length)],
+    ['Payment records in this file', String(payRows.length)],
+    ['Total of all recorded payments', '₹' + totalPaid.toLocaleString('en-IN')],
+    ['Not included', 'Attendance records and member photos. Members you deleted are not included either.'],
+    ['Dates', 'Stored as real Excel dates (dd-mmm-yyyy) so you can sort and filter them.'],
+  ];
+
+  const sheets = [
+    { name: 'Members',         xml: _xlSheet(_XL_MEMBER_COLS, memberRows, { freezeCols: 2 }) },
+    { name: 'Payment History', xml: _xlSheet(_XL_PAY_COLS, payRows) },
+    { name: 'Backup Info',     xml: _xlSheet(infoCols, infoRows, { noFilter: true, noFreeze: true }) },
+  ];
+
+  const NS = 'http://schemas.openxmlformats.org/';
+  const files = [
+    { name: '[Content_Types].xml', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="' + NS + 'package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
+    { name: '_rels/.rels', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="' + NS + 'package/2006/relationships"><Relationship Id="rId1" Type="' + NS + 'officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name: 'xl/workbook.xml', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="' + NS + 'spreadsheetml/2006/main" xmlns:r="' + NS + 'officeDocument/2006/relationships"><sheets>' +
+      sheets.map((s, i) => `<sheet name="${_xlEsc(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets></workbook>' },
+    { name: 'xl/_rels/workbook.xml.rels', text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="' + NS + 'package/2006/relationships">' +
+      sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Type="${NS}officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('') +
+      `<Relationship Id="rId${sheets.length + 1}" Type="${NS}officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
+    { name: 'xl/styles.xml', text: _XL_STYLES },
+    ...sheets.map((s, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, text: s.xml })),
+  ];
+  return _xlZip(files);
+}
+
+async function exportMembersExcel(btn) {
+  try {
+    const u = JSON.parse(localStorage.getItem('user') || '{}');
+    if (u.role === 'staff') { toast('Only the gym owner can download the member backup', 'error'); return; }
+  } catch (e) {}
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Preparing…'; }
+  try {
+    const res = await fetch(API, { headers: hdrs() });   // always a fresh, complete list
+    if (res.status === 401) { logout(); return; }
+    if (!res.ok) throw new Error('Server error ' + res.status);
+    const members = (await res.json()).filter(m => !m.isDeleted);
+    if (!members.length) { toast('No members to export yet', 'error'); return; }
+
+    const bytes = buildMembersWorkbook(members, getGymName());
+    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const safeGym = getGymName().replace(/[^\w\-]+/g, '_').replace(/^_+|_+$/g, '') || 'Gym';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${safeGym}_Members_${getLocalTodayStr()}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast(`Downloaded ${members.length} members`, 'success');
+  } catch (e) {
+    toast('Export failed: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+}
+// staff accounts never see the backup button
+(function () {
+  try {
+    const u = JSON.parse(localStorage.getItem('user') || '{}');
+    if (u.role === 'staff') { const b = document.getElementById('memberExportBar'); if (b) b.style.display = 'none'; }
+  } catch (e) {}
+})();
 
 /* ── DUPLICATE PHONE GUARD ──
    A phone number can only exist once per gym. Checked instantly against the
