@@ -11,13 +11,6 @@ app.set('trust proxy', 1); // correct protocol/host behind Hostinger's proxy
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-// Force WebViews and browsers to never cache API data
-app.use('/api', (req, res, next) => {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  next();
-});
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -169,6 +162,18 @@ async function runMaintenance() {
     }
   } catch (e) {
     console.warn('⚠️ Could not verify/adjust gyms AUTO_INCREMENT:', e.message);
+  }
+
+  // Make sure the DB itself refuses a 2nd member with the same phone in the same
+  // gym (the index is dropped/recreated on every boot above; this is the safety net).
+  try {
+    const [idx] = await sequelize.query("SHOW INDEX FROM members WHERE Key_name = 'members_user_phone_unique'");
+    if (!idx.length) {
+      await sequelize.query('ALTER TABLE members ADD UNIQUE INDEX members_user_phone_unique (userId, phone)');
+      console.log('✅ unique (gym, phone) index restored on members');
+    }
+  } catch (e) {
+    console.warn('⚠️ Could not enforce unique phone per gym - duplicates probably already exist. Run find-duplicate-phones.sql:', e.message);
   }
 
   console.log('✅ Tables synced');
